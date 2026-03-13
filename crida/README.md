@@ -114,9 +114,3 @@ Rollback evidence: `media/rollback_demo.png`
 | Security_Officer | 4 | Watchlist, Criminal Records |
 
 ---
-
-## Contact
-
-Jalal Ahmed: bscs23134@itu.edu.pk  
-Khadijah Farooqi: bscs23128@itu.edu.pk  
-Office Hours: Monday & Thursday, 11:30 AM – 2:30 PM
