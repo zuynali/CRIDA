@@ -60,7 +60,7 @@ def _send_email_async(subject, body, notif_id):
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"CRIDA — {subject}"
         msg["From"]    = Config.SMTP_FROM
-        msg["To"]      = Config.SMTP_USER   # Replace with citizen email when available
+        msg["To"]      = Config.SMTP_USER   
 
         html = f"""<html><body style="font-family:Arial;color:#1F4E79">
   <div style="background:#1F4E79;padding:16px;color:white"><h2>CRIDA Notification</h2></div>
@@ -78,11 +78,11 @@ def _send_email_async(subject, body, notif_id):
             server.login(Config.SMTP_USER, Config.SMTP_PASS)
             server.send_message(msg)
 
-        execute_query(
+        execute_query( 
             "UPDATE Notification SET email_sent = 1 WHERE notification_id = %s",
             (notif_id,)
         )
         logger.info(f"Email sent for notification {notif_id}")
 
-    except Exception as e:
+    except Exception as e: 
         logger.warning(f"Email send failed (non-critical): {e}")

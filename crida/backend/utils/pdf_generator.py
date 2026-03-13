@@ -1,4 +1,4 @@
-from fpdf import FPDF
+from fpdf import FPDF 
 import os
 from db import execute_query
 from datetime import date
