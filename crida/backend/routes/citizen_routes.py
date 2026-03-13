@@ -1,33 +1,21 @@
-"""
-routes/citizen_routes.py — Full Citizen CRUD
-=============================================
-GET  /           — list citizens (paginated, searchable)
-GET  /<id>       — get single citizen via CitizenProfile_View
-POST /           — create citizen (ACID: INSERT + Audit_Log)
-PUT  /<id>       — update citizen (ACID: UPDATE + Audit_Log)
-DELETE /<id>     — soft-delete (set status='inactive')
-"""
-
 import logging
 from flask import Blueprint, request, jsonify, g
 from db import execute_query, execute_transaction_custom
 from middleware.auth import token_required
 from middleware.rbac import permission_required
 from utils.validators import validate_national_id, require_fields
-from utils.notifications import send_notification
 
-logger     = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 citizen_bp = Blueprint("citizens", __name__)
 
 
 @citizen_bp.route("/", methods=["GET"])
 @token_required
 def list_citizens():
-    page   = int(request.args.get("page", 1))
-    limit  = min(int(request.args.get("limit", 20)), 100)
+    page = int(request.args.get("page", 1))
+    limit = min(int(request.args.get("limit", 20)), 100)
     offset = (page - 1) * limit
     search = request.args.get("search", "").strip()
-
     if search:
         like = f"%{search}%"
         rows = execute_query(
@@ -38,28 +26,23 @@ def list_citizens():
                WHERE first_name LIKE %s OR last_name LIKE %s
                   OR national_id_number LIKE %s
                ORDER BY citizen_id LIMIT %s OFFSET %s""",
-            (like, like, like, limit, offset), fetch='all'
-        )
+            (like, like, like, limit, offset), fetch='all')
     else:
         rows = execute_query(
             """SELECT citizen_id, national_id_number,
                       CONCAT(first_name,' ',last_name) AS full_name,
                       dob, gender, marital_status, blood_group, status
-               FROM Citizen
-               ORDER BY citizen_id LIMIT %s OFFSET %s""",
-            (limit, offset), fetch='all'
-        )
+               FROM Citizen ORDER BY citizen_id LIMIT %s OFFSET %s""",
+            (limit, offset), fetch='all')
     total = execute_query("SELECT COUNT(*) AS cnt FROM Citizen", fetch='one')
-    return jsonify({"citizens": rows or [], "total": total["cnt"],
-                    "page": page, "limit": limit}), 200
+    return jsonify({"citizens": rows or [], "total": total["cnt"], "page": page, "limit": limit}), 200
 
 
 @citizen_bp.route("/<int:cid>", methods=["GET"])
 @token_required
 def get_citizen(cid):
     row = execute_query(
-        "SELECT * FROM CitizenProfile_View WHERE citizen_id = %s",
-        (cid,), fetch='one'
+        "SELECT * FROM CitizenProfile_View WHERE citizen_id = %s", (cid,), fetch='one'
     )
     if not row:
         return jsonify({"error": "Citizen not found"}), 404
@@ -71,8 +54,7 @@ def get_citizen(cid):
 @permission_required("manage_citizens")
 def create_citizen():
     data = request.json or {}
-    ok, err = require_fields(data, "national_id_number", "first_name",
-                             "last_name", "dob", "gender")
+    ok, err = require_fields(data, "national_id_number", "first_name", "last_name", "dob", "gender")
     if not ok:
         return jsonify({"error": err}), 400
     if not validate_national_id(data["national_id_number"]):
@@ -81,25 +63,21 @@ def create_citizen():
     def ops(conn, cursor):
         cursor.execute(
             """INSERT INTO Citizen
-                   (national_id_number, first_name, last_name, dob, gender,
-                    marital_status, blood_group, status)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
+               (national_id_number, first_name, last_name, dob, gender,
+                marital_status, blood_group, status)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
             (data["national_id_number"], data["first_name"], data["last_name"],
              data["dob"], data["gender"],
              data.get("marital_status", "Single"),
              data.get("blood_group"),
-             data.get("status", "active"))
-        )
-        cid = cursor.lastrowid
+             data.get("status", "active")))
+        new_cid = cursor.lastrowid
         cursor.execute(
             """INSERT INTO Audit_Log
-                   (officer_id, action_type, table_name, record_id,
-                    new_values, ip_address)
-               VALUES (%s,'INSERT','Citizen',%s,%s,%s)""",
-            (g.officer["officer_id"], cid,
-             str(data), request.remote_addr or "unknown")
-        )
-        return cid
+               (officer_id, action_type, table_name, record_id, new_values, ip_address)
+               VALUES (%s, 'INSERT', 'Citizen', %s, %s, %s)""",
+            (g.officer["officer_id"], new_cid, str(data), request.remote_addr))
+        return new_cid
 
     new_id = execute_transaction_custom(ops)
     return jsonify({"message": "Citizen created", "citizen_id": new_id}), 201
@@ -109,10 +87,9 @@ def create_citizen():
 @token_required
 @permission_required("manage_citizens")
 def update_citizen(cid):
-    data    = request.json or {}
-    allowed = ["first_name", "last_name", "dob", "gender",
-               "marital_status", "blood_group", "status"]
-    sets    = [f"{k} = %s" for k in data if k in allowed]
+    data = request.json or {}
+    allowed = ["first_name", "last_name", "dob", "gender", "marital_status", "blood_group", "status"]
+    sets = [f"{k} = %s" for k in data if k in allowed]
     if not sets:
         return jsonify({"error": "No updatable fields provided"}), 400
     vals = [data[k] for k in data if k in allowed]
@@ -120,14 +97,12 @@ def update_citizen(cid):
 
     def ops(conn, cursor):
         cursor.execute(
-            f"UPDATE Citizen SET {', '.join(sets)} WHERE citizen_id = %s", vals
-        )
+            f"UPDATE Citizen SET {', '.join(sets)} WHERE citizen_id = %s", vals)
         cursor.execute(
             """INSERT INTO Audit_Log
-                   (officer_id, action_type, table_name, record_id, ip_address)
-               VALUES (%s,'UPDATE','Citizen',%s,%s)""",
-            (g.officer["officer_id"], cid, request.remote_addr or "unknown")
-        )
+               (officer_id, action_type, table_name, record_id, ip_address)
+               VALUES (%s, 'UPDATE', 'Citizen', %s, %s)""",
+            (g.officer["officer_id"], cid, request.remote_addr))
         return cursor.rowcount
 
     execute_transaction_custom(ops)
@@ -138,24 +113,17 @@ def update_citizen(cid):
 @token_required
 @permission_required("manage_citizens")
 def delete_citizen(cid):
-    """Soft delete — sets status='inactive' (never hard-deletes citizens)."""
-    row = execute_query(
-        "SELECT citizen_id FROM Citizen WHERE citizen_id = %s",
-        (cid,), fetch='one'
-    )
-    if not row:
+    existing = execute_query("SELECT citizen_id FROM Citizen WHERE citizen_id = %s", (cid,), fetch='one')
+    if not existing:
         return jsonify({"error": "Citizen not found"}), 404
 
     def ops(conn, cursor):
-        cursor.execute(
-            "UPDATE Citizen SET status='inactive' WHERE citizen_id = %s", (cid,)
-        )
+        cursor.execute("UPDATE Citizen SET status = 'inactive' WHERE citizen_id = %s", (cid,))
         cursor.execute(
             """INSERT INTO Audit_Log
-                   (officer_id, action_type, table_name, record_id, ip_address)
-               VALUES (%s,'DELETE','Citizen',%s,%s)""",
-            (g.officer["officer_id"], cid, request.remote_addr or "unknown")
-        )
+               (officer_id, action_type, table_name, record_id, ip_address)
+               VALUES (%s, 'DELETE', 'Citizen', %s, %s)""",
+            (g.officer["officer_id"], cid, request.remote_addr))
         return True
 
     execute_transaction_custom(ops)
