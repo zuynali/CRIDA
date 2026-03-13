@@ -2,4 +2,3 @@ venv/
 crida/backend/venv/
 __pycache__/
 *.pyc
-
