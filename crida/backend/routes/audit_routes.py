@@ -5,9 +5,11 @@ from middleware.rbac import role_required
 
 audit_bp = Blueprint("audit", __name__)
 
+
 # Schema reference:
 # Audit_Log: log_id, officer_id, action_type, table_name, record_id,
 #            old_values, new_values, ip_address, timestamp
+
 
 
 @audit_bp.route("/", methods=["GET"])
