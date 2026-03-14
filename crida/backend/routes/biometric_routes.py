@@ -10,6 +10,7 @@ from utils.validators import require_fields
 logger = logging.getLogger(__name__)
 biometric_bp = Blueprint("biometric", __name__)
 
+
 # Schema reference:
 # Biometric_Data: biometric_id, citizen_id, fingerprint_hash, facial_scan_hash
 

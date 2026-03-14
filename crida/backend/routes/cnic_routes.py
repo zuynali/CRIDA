@@ -14,6 +14,7 @@ cnic_bp = Blueprint("cnic", __name__)
 # NOTE: NO fee_paid column on CNIC_Application
 
 
+
 @cnic_bp.route("/", methods=["GET"])
 @token_required
 def list_cnic_applications():
