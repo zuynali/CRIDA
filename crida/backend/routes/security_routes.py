@@ -11,9 +11,11 @@ security_bp = Blueprint("security", __name__)
 # Schema reference:
 # Criminal_Record: record_id, citizen_id, case_number, offense, offense_date,
 #                  conviction_date, sentence, status, court_name
-# Watchlist: watchlist_id, citizen_id, reason, added_date (DEFAULT), added_by (NOT NULL),
+# Watchlist: watchlist_id, citizen_id, reason, added_date, added_by,
 #            watchlist_type ENUM('Security','Fraud','Immigration','Court Order') NOT NULL,
-#            expiry_date NULL
+#            expiry_date
+
+VALID_WATCHLIST_TYPES = ('Security', 'Fraud', 'Immigration', 'Court Order')
 
 
 @security_bp.route("/criminal-records", methods=["GET"])
@@ -126,14 +128,13 @@ def get_watchlist():
 @permission_required("manage_security")
 def add_to_watchlist():
     data = request.json or {}
-    # watchlist_type is NOT NULL with no default — must be supplied
-    ok, err = require_fields(data, "citizen_id", "reason", "watchlist_type")
+    ok, err = require_fields(data, "citizen_id", "reason")
     if not ok:
         return jsonify({"error": err}), 400
 
-    valid_types = ('Security', 'Fraud', 'Immigration', 'Court Order')
-    if data["watchlist_type"] not in valid_types:
-        return jsonify({"error": f"watchlist_type must be one of {valid_types}"}), 400
+    watchlist_type = data.get("watchlist_type", "Security")
+    if watchlist_type not in VALID_WATCHLIST_TYPES:
+        return jsonify({"error": f"watchlist_type must be one of {VALID_WATCHLIST_TYPES}"}), 400
 
     citizen = execute_query(
         "SELECT citizen_id FROM Citizen WHERE citizen_id = %s",
@@ -141,11 +142,20 @@ def add_to_watchlist():
     if not citizen:
         return jsonify({"error": "Citizen not found"}), 404
 
+    # Check not already on watchlist
+    existing = execute_query(
+        "SELECT watchlist_id FROM Watchlist WHERE citizen_id = %s",
+        (data["citizen_id"],), fetch='one')
+    if existing:
+        return jsonify({"error": "Citizen is already on the watchlist"}), 409
+
     wid = execute_query(
         """INSERT INTO Watchlist
                (citizen_id, reason, added_by, watchlist_type, expiry_date)
            VALUES (%s, %s, %s, %s, %s)""",
-        (data["citizen_id"], data["reason"], g.officer["officer_id"],
-         data["watchlist_type"], data.get("expiry_date")))
+        (data["citizen_id"], data["reason"],
+         g.officer["officer_id"],
+         watchlist_type,
+         data.get("expiry_date")))
 
     return jsonify({"message": "Added to watchlist", "watchlist_id": wid}), 201

@@ -14,8 +14,18 @@ license_bp = Blueprint("licenses", __name__)
 #                              status (Pending/Test Scheduled/Test Passed/Test Failed/
 #                                      Approved/Rejected),
 #                              test_result (Pass/Fail), test_date, office_id
+#   CHECK: when status IN ('Test Passed','Test Failed') → test_result IS NOT NULL AND test_date IS NOT NULL
 # Driving_License: license_id, citizen_id, license_number, issue_date, expiry_date,
 #                  license_type, status (Valid/Expired/Suspended/Revoked)
+
+
+def _add_years(d, years):
+    """Add years to a date, safely handling Feb-29 on non-leap target years."""
+    try:
+        return d.replace(year=d.year + years)
+    except ValueError:
+        # Feb 29 → Feb 28 on non-leap year
+        return d.replace(year=d.year + years, day=28)
 
 
 @license_bp.route("/", methods=["GET"])
@@ -121,6 +131,11 @@ def schedule_test(app_id):
 @token_required
 @permission_required("manage_license")
 def record_test_result(app_id):
+    """
+    Records the test result.
+    Sets test_date to today if not already set — required by the DB CHECK constraint:
+      (status IN ('Test Passed','Test Failed') → test_result IS NOT NULL AND test_date IS NOT NULL)
+    """
     data = request.json or {}
     ok, err = require_fields(data, "test_result")
     if not ok:
@@ -134,13 +149,17 @@ def record_test_result(app_id):
         return jsonify({"error": "Application not found"}), 404
 
     new_status = "Test Passed" if data["test_result"] == "Pass" else "Test Failed"
+    # Use provided test_date, fall back to existing, then today — satisfies NOT NULL constraint
+    test_date = (data.get("test_date")
+                 or (str(app["test_date"]) if app.get("test_date") else None)
+                 or str(datetime.date.today()))
 
     def ops(conn, cursor):
         cursor.execute(
             """UPDATE Driving_License_Application
-               SET test_result = %s, status = %s
+               SET test_result = %s, status = %s, test_date = %s
                WHERE dl_app_id = %s""",
-            (data["test_result"], new_status, app_id))
+            (data["test_result"], new_status, test_date, app_id))
         cursor.execute(
             """INSERT INTO Audit_Log
                (officer_id, action_type, table_name, record_id, ip_address)
@@ -174,7 +193,7 @@ def issue_license(app_id):
 
         # Step 2: insert Driving_License
         today = datetime.date.today()
-        expiry = datetime.date(today.year + 5, today.month, today.day)
+        expiry = _add_years(today, 5)   # safely handles Feb-29
         license_number = f"DL{app_id:07d}"
 
         cursor.execute(

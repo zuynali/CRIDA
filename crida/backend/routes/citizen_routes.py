@@ -35,12 +35,7 @@ def list_citizens():
                FROM Citizen ORDER BY citizen_id LIMIT %s OFFSET %s""",
             (limit, offset), fetch='all')
     total = execute_query("SELECT COUNT(*) AS cnt FROM Citizen", fetch='one')
-    return jsonify({
-        "citizens": rows or [],
-        "total": total["cnt"],
-        "page": page,
-        "limit": limit
-    }), 200
+    return jsonify({"citizens": rows or [], "total": total["cnt"], "page": page, "limit": limit}), 200
 
 
 @citizen_bp.route("/<int:cid>", methods=["GET"])
@@ -59,8 +54,7 @@ def get_citizen(cid):
 @permission_required("manage_citizens")
 def create_citizen():
     data = request.json or {}
-    ok, err = require_fields(data, "national_id_number", "first_name", "last_name",
-                             "dob", "gender")
+    ok, err = require_fields(data, "national_id_number", "first_name", "last_name", "dob", "gender")
     if not ok:
         return jsonify({"error": err}), 400
     if not validate_national_id(data["national_id_number"]):
@@ -94,8 +88,10 @@ def create_citizen():
 @permission_required("manage_citizens")
 def update_citizen(cid):
     data = request.json or {}
-    allowed = ["first_name", "last_name", "dob", "gender",
-               "marital_status", "blood_group", "status"]
+    allowed = ["first_name", "last_name", "dob", "gender", "marital_status", "blood_group", "status"]
+    # Validate status if provided — must be a valid ENUM value
+    if "status" in data and data["status"] not in ("active", "deceased", "blacklisted"):
+        return jsonify({"error": "status must be one of: active, deceased, blacklisted"}), 400
     sets = [f"{k} = %s" for k in data if k in allowed]
     if not sets:
         return jsonify({"error": "No updatable fields provided"}), 400
@@ -120,16 +116,14 @@ def update_citizen(cid):
 @token_required
 @permission_required("manage_citizens")
 def delete_citizen(cid):
-    existing = execute_query(
-        "SELECT citizen_id FROM Citizen WHERE citizen_id = %s", (cid,), fetch='one')
+    existing = execute_query("SELECT citizen_id FROM Citizen WHERE citizen_id = %s", (cid,), fetch='one')
     if not existing:
         return jsonify({"error": "Citizen not found"}), 404
 
     def ops(conn, cursor):
-        # 'blacklisted' is the correct ENUM value for deactivation
-        # ENUM('active','deceased','blacklisted') — 'inactive' does not exist
-        cursor.execute(
-            "UPDATE Citizen SET status = 'blacklisted' WHERE citizen_id = %s", (cid,))
+        # Use 'blacklisted' — the valid ENUM soft-delete state
+        # ('inactive' is not in the schema ENUM: active, deceased, blacklisted)
+        cursor.execute("UPDATE Citizen SET status = 'blacklisted' WHERE citizen_id = %s", (cid,))
         cursor.execute(
             """INSERT INTO Audit_Log
                (officer_id, action_type, table_name, record_id, ip_address)
@@ -138,4 +132,4 @@ def delete_citizen(cid):
         return True
 
     execute_transaction_custom(ops)
-    return jsonify({"message": "Citizen blacklisted"}), 200
+    return jsonify({"message": "Citizen deactivated (blacklisted)"}), 200

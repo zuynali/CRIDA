@@ -88,23 +88,18 @@ function logout() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 async function loadDashboard() {
-  // Audit endpoint (/audit/) requires Admin or Security_Officer.
-  // Run all three in parallel; if audit returns 403 for lower-privilege roles,
-  // show "—" for that stat instead of breaking the whole dashboard.
   const [cr, nr, ar] = await Promise.all([
     req("GET", "/citizens/?limit=1"),
     req("GET", "/notifications/unread-count"),
     req("GET", "/audit/?limit=1")
   ]);
-
   const stats = [
-    { n: cr.ok ? (cr.data.total || "—") : "—",          l: "Total Citizens" },
-    { n: OFFICER?.role_name || "—",                      l: "Your Role" },
-    { n: OFFICER?.access_level || "—",                   l: "Access Level" },
-    { n: nr.ok ? (nr.data.unread_count ?? "—") : "—",   l: "Unread Alerts" },
-    // Audit count only available to Admin / Security_Officer (access_level >= 4)
-    { n: ar.ok ? (ar.data.total || "—") : "N/A",         l: "Audit Entries" },
-    { n: "MySQL 8.0",                                     l: "Database" },
+    { n: cr.data.total || "—",          l: "Total Citizens" },
+    { n: OFFICER?.role_name || "—",     l: "Your Role" },
+    { n: OFFICER?.access_level || "—",  l: "Access Level" },
+    { n: nr.data.unread_count ?? "—",   l: "Unread Alerts" },
+    { n: ar.data.total || "—",          l: "Audit Entries" },
+    { n: "MySQL 8.0",                   l: "Database" },
   ];
   document.getElementById("stats-grid").innerHTML = stats.map(s =>
     `<div class="stat-card">
@@ -227,6 +222,46 @@ async function addCriminalRecord() {
     toast("Criminal record added", "ok");
     acidLog(`CRIMINAL_RECORD ${r.data.record_id} added — ACID: INSERT + Audit_Log COMMIT`);
     loadCriminalRecords();
+  } else toast("Error: " + r.data.error, "err");
+}
+
+// ── Watchlist ─────────────────────────────────────────────────────────────
+async function loadWatchlist() {
+  const r   = await req("GET", "/security/watchlist");
+  const div = document.getElementById("watchlist-table");
+  if (!r.ok) { div.innerHTML = `<p style="color:var(--danger)">${r.data.error || "Permission denied"}</p>`; return; }
+  const rows = r.data.watchlist || [];
+  if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>Watchlist is empty.</p>"; return; }
+  div.innerHTML = `<table style="margin-top:14px">
+    <tr><th>ID</th><th>Citizen</th><th>Type</th><th>Reason</th><th>Added</th><th>Expiry</th></tr>
+    ${rows.map(w => `<tr>
+      <td><code>${w.watchlist_id}</code></td>
+      <td>${w.citizen_name} (${w.citizen_id})</td>
+      <td><span class="badge warning">${w.watchlist_type}</span></td>
+      <td>${w.reason}</td>
+      <td>${String(w.added_date).substring(0,10)}</td>
+      <td>${w.expiry_date ? String(w.expiry_date).substring(0,10) : "—"}</td>
+    </tr>`).join("")}
+  </table>`;
+}
+
+function showAddWatchlist() {
+  const f = document.getElementById("add-watchlist-form");
+  f.style.display = f.style.display === "none" ? "block" : "none";
+}
+
+async function addToWatchlist() {
+  const expiry = document.getElementById("wl-expiry").value || undefined;
+  const r = await req("POST", "/security/watchlist", {
+    citizen_id:    parseInt(document.getElementById("wl-cid").value),
+    reason:        document.getElementById("wl-reason").value,
+    watchlist_type: document.getElementById("wl-type").value,
+    ...(expiry ? { expiry_date: expiry } : {})
+  });
+  if (r.ok) {
+    toast("Added to watchlist", "ok");
+    acidLog(`WATCHLIST entry ${r.data.watchlist_id} added — type: ${document.getElementById("wl-type").value}`);
+    loadWatchlist();
   } else toast("Error: " + r.data.error, "err");
 }
 
@@ -444,10 +479,6 @@ async function markRead(nid) {
 async function loadPermissions() {
   const r   = await req("GET", "/permissions/");
   const div = document.getElementById("perms-table");
-  if (!r.ok) {
-    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Permission list requires Admin role.</p>`;
-    return;
-  }
   const rows = r.data.permissions || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>No permissions granted yet.</p>"; return; }
   div.innerHTML = `<table style="margin-top:14px">
@@ -492,6 +523,8 @@ async function revokePermission() {
 }
 
 // ── Audit Log ─────────────────────────────────────────────────────────────
+// NOTE: seed_2.sql renames the column from `timestamp` to `action_time`.
+//       The backend audit_routes.py queries `al.action_time` accordingly.
 async function loadAuditLog() {
   const oid    = document.getElementById("audit-officer").value;
   const tbl    = document.getElementById("audit-table").value;
@@ -502,10 +535,6 @@ async function loadAuditLog() {
   if (action) url += `&action_type=${action}`;
   const r   = await req("GET", url);
   const div = document.getElementById("audit-table-div");
-  if (!r.ok) {
-    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Audit log requires Admin or Security Officer role.</p>`;
-    return;
-  }
   const rows = r.data.logs || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>No logs found.</p>"; return; }
   div.innerHTML = `<p style="margin-bottom:8px;color:var(--text-muted);font-size:0.78rem">Total: ${r.data.total} entries</p>
@@ -518,7 +547,7 @@ async function loadAuditLog() {
       <td>${l.table_name}</td>
       <td>${l.record_id ?? "—"}</td>
       <td><code>${l.ip_address || "—"}</code></td>
-      <td style="font-family:var(--font-mono);font-size:0.75rem">${String(l.timestamp).substring(0,19)}</td>
+      <td style="font-family:var(--font-mono);font-size:0.75rem">${String(l.action_time).substring(0,19)}</td>
     </tr>`).join("")}
   </table>`;
 }

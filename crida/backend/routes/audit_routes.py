@@ -5,11 +5,10 @@ from middleware.rbac import role_required
 
 audit_bp = Blueprint("audit", __name__)
 
-
 # Schema reference:
 # Audit_Log: log_id, officer_id, action_type, table_name, record_id,
-#            old_values, new_values, ip_address, timestamp
-
+#            old_values, new_values, ip_address, action_time
+# NOTE: The column was renamed from `timestamp` to `action_time` via seed_2.sql ALTER TABLE.
 
 
 @audit_bp.route("/", methods=["GET"])
@@ -24,7 +23,10 @@ def list_audit_logs():
     table_name = request.args.get("table_name")
     action_type = request.args.get("action_type")
 
-    sql = """SELECT al.*, o.full_name AS officer_name
+    sql = """SELECT al.log_id, al.officer_id, al.action_type, al.table_name,
+                    al.record_id, al.old_values, al.new_values,
+                    al.ip_address, al.action_time,
+                    o.full_name AS officer_name
              FROM Audit_Log al
              JOIN Officer o ON al.officer_id = o.officer_id
              WHERE 1=1"""
@@ -40,7 +42,7 @@ def list_audit_logs():
         sql += " AND al.action_type = %s"
         params.append(action_type)
 
-    sql += " ORDER BY al.timestamp DESC LIMIT %s OFFSET %s"
+    sql += " ORDER BY al.action_time DESC LIMIT %s OFFSET %s"
     params.extend([limit, offset])
 
     rows = execute_query(sql, params, fetch='all')
@@ -59,7 +61,10 @@ def list_audit_logs():
 @role_required("Admin", "Security_Officer")
 def get_audit_log(lid):
     row = execute_query(
-        """SELECT al.*, o.full_name AS officer_name
+        """SELECT al.log_id, al.officer_id, al.action_type, al.table_name,
+                  al.record_id, al.old_values, al.new_values,
+                  al.ip_address, al.action_time,
+                  o.full_name AS officer_name
            FROM Audit_Log al
            JOIN Officer o ON al.officer_id = o.officer_id
            WHERE al.log_id = %s""",

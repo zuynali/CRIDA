@@ -15,6 +15,16 @@ passport_bp = Blueprint("passports", __name__)
 #                               Ready for Collection/Collected),
 #                       office_id, fee_paid (tinyint, default 0)
 # Passport: passport_id, citizen_id, passport_number, issue_date, expiry_date, passport_status
+#   CHECK: expiry_date = DATE_ADD(issue_date, INTERVAL 10 YEAR)
+
+
+def _add_years(d, years):
+    """Add years to a date, safely handling Feb-29 on non-leap target years."""
+    try:
+        return d.replace(year=d.year + years)
+    except ValueError:
+        # Feb 29 → Feb 28 on non-leap year
+        return d.replace(year=d.year + years, day=28)
 
 
 @passport_bp.route("/", methods=["GET"])
@@ -148,10 +158,10 @@ def reject_passport(app_id):
 @permission_required("manage_passport")
 def issue_passport(app_id):
     """
-    ACID Transaction Scenario (guide section 3.2):
+    ACID Transaction:
     Step 1 — Verify application is Approved AND fee_paid = 1
     Step 2 — Check citizen not on Watchlist
-    Step 3 — Insert Passport record
+    Step 3 — Insert Passport record (expiry = issue + 10 years, satisfies DB CHECK)
     Step 4 — Log to Audit_Log
     All 4 steps succeed or ALL rollback.
     """
@@ -175,7 +185,7 @@ def issue_passport(app_id):
 
         # Step 3: insert Passport
         today = datetime.date.today()
-        expiry = datetime.date(today.year + 10, today.month, today.day)
+        expiry = _add_years(today, 10)   # safely handles Feb-29
         cursor.execute(
             """INSERT INTO Passport
                (citizen_id, passport_number, issue_date, expiry_date)
