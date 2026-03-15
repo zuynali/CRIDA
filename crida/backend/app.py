@@ -1,10 +1,4 @@
-"""
-app.py — CRIDA Phase 2 Flask Application Entry Point
-=====================================================
-Registers all 17 blueprint modules under /api/v1/...
-Verifies DB connection on startup.
-Serves health check at GET /api/v1/health.
-"""
+
 
 import os
 import logging
@@ -15,24 +9,20 @@ from flask_bcrypt import Bcrypt
 
 from db import test_connection
 
-# ── Logging setup ──────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-# ── App factory ───────────────────────────────────────────────────────────
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})  # Tighten for production
+CORS(app, resources={r"/api/*": {"origins": "*"}})  
 bcrypt = Bcrypt(app)
 
-# ── Upload folder ─────────────────────────────────────────────────────────
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads", "photos")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.config["UPLOAD_DIR"] = UPLOAD_DIR
 
-# ── Register all blueprints ───────────────────────────────────────────────
 from routes.auth_routes        import auth_bp
 from routes.citizen_routes     import citizen_bp
 from routes.cnic_routes        import cnic_bp
@@ -74,7 +64,6 @@ blueprints = [
 for bp, prefix in blueprints:
     app.register_blueprint(bp, url_prefix=prefix)
 
-# ── Health check ──────────────────────────────────────────────────────────
 @app.route("/api/v1/health")
 def health():
     db_ok = test_connection()
@@ -85,7 +74,6 @@ def health():
     }), 200 if db_ok else 503
 
 
-# ── Global error handlers ─────────────────────────────────────────────────
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({"error": "Endpoint not found", "status": 404}), 404
@@ -96,7 +84,6 @@ def server_error(e):
     return jsonify({"error": "Internal server error", "status": 500}), 500
 
 
-# ── Entry point ───────────────────────────────────────────────────────────
 if __name__ == "__main__":
     logger.info("Starting CRIDA API on http://localhost:5000")
     app.run(debug=True, host="0.0.0.0", port=5000)

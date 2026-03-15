@@ -1,16 +1,3 @@
-"""
-db.py — MySQL Connection Pool & ACID Transaction Helpers
-=========================================================
-All SQL uses %s placeholders — NEVER string concatenation.
-
-Public API:
-  get_connection()               → raw connection from pool
-  execute_query(sql, params, fetch)  → SELECT / single DML helper
-  execute_transaction(operations)    → list of (sql, params) — atomic
-  execute_transaction_custom(fn)     → fn(conn, cursor) — flexible ACID
-  test_connection()              → startup health check
-"""
-
 import logging
 import mysql.connector
 from mysql.connector import pooling, Error
@@ -19,7 +6,6 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
-# ── Connection pool (created once at startup) ──────────────────────────────
 _pool = None
 
 
@@ -37,25 +23,17 @@ def get_pool():
             database=Config.DB_NAME,
             charset="utf8mb4",
             collation="utf8mb4_unicode_ci",
-            autocommit=False  # We manage commits manually
+            autocommit=False  
         )
     return _pool
 
 
 def get_connection():
-    """Get a connection from the pool."""
     return get_pool().get_connection()
 
 
-# ── Helper: run a single SELECT/DML with auto-commit ──────────────────────
 def execute_query(sql, params=None, fetch=False):
-    """
-    Run a parameterised query.
 
-    fetch=False      → DML (INSERT/UPDATE/DELETE) → commits, returns lastrowid
-    fetch='one'      → SELECT single row           → returns dict or None
-    fetch='all'      → SELECT all rows             → returns list of dicts
-    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -76,19 +54,8 @@ def execute_query(sql, params=None, fetch=False):
         conn.close()
 
 
-# ── Helper: ACID transaction wrapper ─────────────────────────────────────
 def execute_transaction(operations):
-    """
-    ACID transaction runner.
 
-    operations: list of (sql_string, params_tuple) pairs.
-    All succeed or all rollback (Atomicity guaranteed).
-    Returns list of lastrowids in same order.
-
-    Isolation level: READ COMMITTED
-      → Prevents dirty reads.
-      → Concurrent transactions cannot see uncommitted changes.
-    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     results = []
@@ -109,24 +76,8 @@ def execute_transaction(operations):
         conn.close()
 
 
-# ── Helper: custom transaction with callable steps ────────────────────────
 def execute_transaction_custom(fn):
-    """
-    ACID transaction with arbitrary Python logic.
 
-    fn(conn, cursor) is called inside BEGIN...COMMIT.
-    Returns whatever fn returns.
-    Any exception triggers automatic ROLLBACK.
-
-    Usage:
-        def my_ops(conn, cursor):
-            cursor.execute("INSERT ...", (...))
-            new_id = cursor.lastrowid
-            cursor.execute("UPDATE ...", (new_id,))
-            return new_id
-
-        result = execute_transaction_custom(my_ops)
-    """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -145,7 +96,6 @@ def execute_transaction_custom(fn):
 
 
 def test_connection():
-    """Startup health check — returns True if DB is reachable."""
     try:
         row = execute_query("SELECT 1 AS ok", fetch='one')
         return row and row.get('ok') == 1
