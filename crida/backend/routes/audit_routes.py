@@ -7,8 +7,9 @@ audit_bp = Blueprint("audit", __name__)
 
 # Schema reference:
 # Audit_Log: log_id, officer_id, action_type, table_name, record_id,
-#            old_values, new_values, ip_address, action_time
-# NOTE: The column was renamed from `timestamp` to `action_time` via seed_2.sql ALTER TABLE.
+#            old_values, new_values, ip_address, timestamp
+# The column is `timestamp` as defined in SQL_Scripting.sql.
+# seed_2.sql does NOT rename it — no ALTER TABLE is run.
 
 
 @audit_bp.route("/", methods=["GET"])
@@ -25,7 +26,7 @@ def list_audit_logs():
 
     sql = """SELECT al.log_id, al.officer_id, al.action_type, al.table_name,
                     al.record_id, al.old_values, al.new_values,
-                    al.ip_address, al.action_time,
+                    al.ip_address, al.timestamp,
                     o.full_name AS officer_name
              FROM Audit_Log al
              JOIN Officer o ON al.officer_id = o.officer_id
@@ -42,7 +43,7 @@ def list_audit_logs():
         sql += " AND al.action_type = %s"
         params.append(action_type)
 
-    sql += " ORDER BY al.action_time DESC LIMIT %s OFFSET %s"
+    sql += " ORDER BY al.timestamp DESC LIMIT %s OFFSET %s"
     params.extend([limit, offset])
 
     rows = execute_query(sql, params, fetch='all')
@@ -63,7 +64,7 @@ def get_audit_log(lid):
     row = execute_query(
         """SELECT al.log_id, al.officer_id, al.action_type, al.table_name,
                   al.record_id, al.old_values, al.new_values,
-                  al.ip_address, al.action_time,
+                  al.ip_address, al.timestamp,
                   o.full_name AS officer_name
            FROM Audit_Log al
            JOIN Officer o ON al.officer_id = o.officer_id

@@ -88,18 +88,20 @@ function logout() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 async function loadDashboard() {
+  // Audit endpoint requires Admin or Security_Officer.
+  // Other roles get 403 — show "N/A" gracefully instead of breaking the dashboard.
   const [cr, nr, ar] = await Promise.all([
     req("GET", "/citizens/?limit=1"),
     req("GET", "/notifications/unread-count"),
     req("GET", "/audit/?limit=1")
   ]);
   const stats = [
-    { n: cr.data.total || "—",          l: "Total Citizens" },
-    { n: OFFICER?.role_name || "—",     l: "Your Role" },
-    { n: OFFICER?.access_level || "—",  l: "Access Level" },
-    { n: nr.data.unread_count ?? "—",   l: "Unread Alerts" },
-    { n: ar.data.total || "—",          l: "Audit Entries" },
-    { n: "MySQL 8.0",                   l: "Database" },
+    { n: cr.ok ? (cr.data.total || "—") : "—",          l: "Total Citizens" },
+    { n: OFFICER?.role_name || "—",                      l: "Your Role" },
+    { n: OFFICER?.access_level || "—",                   l: "Access Level" },
+    { n: nr.ok ? (nr.data.unread_count ?? "—") : "—",   l: "Unread Alerts" },
+    { n: ar.ok ? (ar.data.total || "—") : "N/A",         l: "Audit Entries" },
+    { n: "MySQL 8.0",                                     l: "Database" },
   ];
   document.getElementById("stats-grid").innerHTML = stats.map(s =>
     `<div class="stat-card">
@@ -229,7 +231,7 @@ async function addCriminalRecord() {
 async function loadWatchlist() {
   const r   = await req("GET", "/security/watchlist");
   const div = document.getElementById("watchlist-table");
-  if (!r.ok) { div.innerHTML = `<p style="color:var(--danger)">${r.data.error || "Permission denied"}</p>`; return; }
+  if (!r.ok) { div.innerHTML = `<p style="color:var(--text-muted)">Watchlist requires Security Officer or Admin role.</p>`; return; }
   const rows = r.data.watchlist || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>Watchlist is empty.</p>"; return; }
   div.innerHTML = `<table style="margin-top:14px">
@@ -479,6 +481,10 @@ async function markRead(nid) {
 async function loadPermissions() {
   const r   = await req("GET", "/permissions/");
   const div = document.getElementById("perms-table");
+  if (!r.ok) {
+    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Permission list requires Admin role.</p>`;
+    return;
+  }
   const rows = r.data.permissions || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>No permissions granted yet.</p>"; return; }
   div.innerHTML = `<table style="margin-top:14px">
@@ -523,8 +529,8 @@ async function revokePermission() {
 }
 
 // ── Audit Log ─────────────────────────────────────────────────────────────
-// NOTE: seed_2.sql renames the column from `timestamp` to `action_time`.
-//       The backend audit_routes.py queries `al.action_time` accordingly.
+// The Audit_Log column is `timestamp` (defined in SQL_Scripting.sql).
+// seed_2.sql does NOT rename it — queries use `timestamp` throughout.
 async function loadAuditLog() {
   const oid    = document.getElementById("audit-officer").value;
   const tbl    = document.getElementById("audit-table").value;
@@ -535,6 +541,10 @@ async function loadAuditLog() {
   if (action) url += `&action_type=${action}`;
   const r   = await req("GET", url);
   const div = document.getElementById("audit-table-div");
+  if (!r.ok) {
+    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Audit log requires Admin or Security Officer role.</p>`;
+    return;
+  }
   const rows = r.data.logs || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>No logs found.</p>"; return; }
   div.innerHTML = `<p style="margin-bottom:8px;color:var(--text-muted);font-size:0.78rem">Total: ${r.data.total} entries</p>
@@ -547,7 +557,7 @@ async function loadAuditLog() {
       <td>${l.table_name}</td>
       <td>${l.record_id ?? "—"}</td>
       <td><code>${l.ip_address || "—"}</code></td>
-      <td style="font-family:var(--font-mono);font-size:0.75rem">${String(l.action_time).substring(0,19)}</td>
+      <td style="font-family:var(--font-mono);font-size:0.75rem">${String(l.timestamp).substring(0,19)}</td>
     </tr>`).join("")}
   </table>`;
 }
