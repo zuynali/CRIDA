@@ -1,4 +1,4 @@
-USE crid;
+USE CRID;
 
 SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE Payment_Transaction;

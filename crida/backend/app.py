@@ -84,6 +84,9 @@ def server_error(e):
     return jsonify({"error": "Internal server error", "status": 500}), 500
 
 
+
 if __name__ == "__main__":
     logger.info("Starting CRIDA API on http://localhost:5000")
+    for rule in app.url_map.iter_rules():
+        print(rule)
     app.run(debug=True, host="0.0.0.0", port=5000)

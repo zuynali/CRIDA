@@ -5,8 +5,7 @@
 -- ============================================================
 
 -- 1. Temporarily relax password policy so 'crida_pass' is accepted
-SET GLOBAL validate_password.policy = LOW;
-SET GLOBAL validate_password.length = 6;
+
 
 -- 2. Create application user
 CREATE USER IF NOT EXISTS 'crida_user'@'localhost'
