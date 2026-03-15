@@ -29,10 +29,9 @@ sudo mysql -u root -p CRID < seed_2.sql
 cd backend
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt   # smtplib2 removed — uses stdlib smtplib
-cp .env.example .env              # edit DB password if needed
-python app.py                     # → http://localhost:5000
-```
+pip install -r requirements.txt  
+cp .env.example .env              
+python app.py                     
 
 ### Step 3 — Verify
 
@@ -41,13 +40,6 @@ curl http://localhost:5000/api/v1/health
 # Expected: {"database": "connected", "service": "CRIDA Phase 2 API", "status": "ok"}
 ```
 
-### Step 4 — Frontend
-
-```bash
-cd frontend
-npm install
-node server.js    # → http://localhost:3000
-```
 
 ---
 
@@ -55,7 +47,7 @@ node server.js    # → http://localhost:3000
 
 | Email | Password | Role |
 |-------|----------|------|
-| `officer1@crida.pk` | `hash` | Admin (seed_2.sql legacy) |
+| `officer5@crida.pk` | `hash` | Admin (seed_2.sql legacy) |
 
 ---
 
