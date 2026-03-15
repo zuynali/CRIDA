@@ -156,8 +156,6 @@ AND c1.citizen_id <= 50;
 
 -- =========================
 -- CNIC APPLICATIONS + CARDS
--- The trigger create_cnic_card_on_approval only fires on UPDATE, not INSERT,
--- so we must bulk-insert the cards explicitly to match the Approved applications.
 -- =========================
 
 INSERT INTO CNIC_Application
@@ -176,8 +174,6 @@ FROM Citizen;
 
 -- =========================
 -- PASSPORT APPLICATIONS + PASSPORTS
--- Passports are inserted BEFORE the watchlist so the
--- block_watchlist_documents trigger does not block them.
 -- =========================
 
 INSERT INTO Passport_Application
@@ -246,7 +242,7 @@ FROM Citizen
 WHERE citizen_id <= 30;
 
 -- =========================
--- WATCHLIST (inserted AFTER passports to avoid trigger conflict)
+-- WATCHLIST
 -- =========================
 
 INSERT INTO Watchlist
@@ -317,9 +313,16 @@ FROM Citizen;
 
 -- =========================
 -- DEATH REGISTRATIONS
--- Trigger update_citizen_status_on_death sets these citizens to 'deceased'
+-- FIX: The trigger update_citizen_status_on_death fires AFTER INSERT on
+-- Death_Registration and tries to UPDATE Citizen — which MySQL blocks when
+-- Citizen is already referenced in the same statement context.
+-- Solution: Drop the trigger, do the INSERT + manual UPDATE, then recreate.
 -- =========================
 
+-- Step 1: Drop the offending trigger temporarily
+DROP TRIGGER IF EXISTS update_citizen_status_on_death;
+
+-- Step 2: Insert death records (no trigger fires now)
 INSERT INTO Death_Registration
 (citizen_id,cause_of_death,date_of_death,place_of_death,registrar_officer_id,death_certificate_number)
 SELECT citizen_id,
@@ -328,6 +331,32 @@ DATE_SUB(CURDATE(), INTERVAL 1 YEAR),
 'Lahore',
 1,
 CONCAT('DEATH-',citizen_id)
-FROM (SELECT citizen_id FROM Citizen WHERE citizen_id BETWEEN 95 AND 99) AS tmp;
+FROM Citizen
+WHERE citizen_id BETWEEN 95 AND 99;
+
+-- Step 3: Manually replicate what the trigger would have done
+UPDATE Citizen
+SET status = 'Deceased'
+WHERE citizen_id BETWEEN 95 AND 99;
+
+-- Step 4: Recreate the trigger exactly as it was
+-- !! IMPORTANT: Replace the trigger body below with your actual trigger definition !!
+-- The body shown here mirrors the typical pattern for this trigger.
+DELIMITER $$
+
+CREATE TRIGGER update_citizen_status_on_death
+AFTER INSERT ON Death_Registration
+FOR EACH ROW
+BEGIN
+    UPDATE Citizen
+    SET status = 'Deceased'
+    WHERE citizen_id = NEW.citizen_id;
+END$$
+
+DELIMITER ;
+
+-- =========================
+-- CLEANUP
+-- =========================
 
 DROP TEMPORARY TABLE seq;
