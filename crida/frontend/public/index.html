@@ -9,7 +9,6 @@
 </head>
 <body>
 
-<!-- ── Sidebar ── -->
 <div class="sidebar">
   <div class="logo">
     <i class="fas fa-shield-halved"></i>
@@ -20,48 +19,47 @@
     <div class="nav-label">System</div>
     <nav>
       <a href="#" data-tab="login" class="active"><i class="fas fa-sign-in-alt"></i> Login</a>
-      <a href="#" data-tab="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</a>
+      <a href="#" data-tab="dashboard" data-roles="all"><i class="fas fa-chart-pie"></i> Dashboard</a>
     </nav>
   </div>
 
   <div class="nav-section">
     <div class="nav-label">Citizens</div>
     <nav>
-      <a href="#" data-tab="citizens"><i class="fas fa-users"></i> Citizens</a>
-      <a href="#" data-tab="family"><i class="fas fa-sitemap"></i> Family Tree</a>
-      <a href="#" data-tab="update"><i class="fas fa-edit"></i> Update Requests</a>
+      <a href="#" data-tab="citizens" data-roles="all"><i class="fas fa-users"></i> Citizens</a>
+      <a href="#" data-tab="family"   data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-sitemap"></i> Family Tree</a>
+      <a href="#" data-tab="update"   data-roles="Admin,Registrar"><i class="fas fa-edit"></i> Update Requests</a>
     </nav>
   </div>
 
   <div class="nav-section">
     <div class="nav-label">Documents</div>
     <nav>
-      <a href="#" data-tab="pdf"><i class="fas fa-file-pdf"></i> PDF Generator</a>
-      <a href="#" data-tab="camera"><i class="fas fa-camera"></i> Camera Capture</a>
-      <a href="#" data-tab="biometric"><i class="fas fa-fingerprint"></i> Biometric</a>
+      <a href="#" data-tab="pdf"       data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-file-pdf"></i> PDF Generator</a>
+      <a href="#" data-tab="camera"    data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-camera"></i> Camera Capture</a>
+      <a href="#" data-tab="biometric" data-roles="Admin,Passport_Officer,License_Officer"><i class="fas fa-fingerprint"></i> Biometric</a>
     </nav>
   </div>
 
   <div class="nav-section">
     <div class="nav-label">Security</div>
     <nav>
-      <a href="#" data-tab="criminal"><i class="fas fa-gavel"></i> Criminal Records</a>
-      <a href="#" data-tab="watchlist"><i class="fas fa-eye"></i> Watchlist</a>
-      <a href="#" data-tab="complaints"><i class="fas fa-exclamation-circle"></i> Complaints</a>
+      <a href="#" data-tab="criminal"   data-roles="Admin,Security_Officer"><i class="fas fa-gavel"></i> Criminal Records</a>
+      <a href="#" data-tab="watchlist"  data-roles="Admin,Security_Officer"><i class="fas fa-eye"></i> Watchlist</a>
+      <a href="#" data-tab="complaints" data-roles="Admin,Registrar"><i class="fas fa-exclamation-circle"></i> Complaints</a>
     </nav>
   </div>
 
   <div class="nav-section">
     <div class="nav-label">Admin</div>
     <nav>
-      <a href="#" data-tab="notif"><i class="fas fa-bell"></i> Notifications</a>
-      <a href="#" data-tab="perms"><i class="fas fa-key"></i> Permissions</a>
-      <a href="#" data-tab="audit"><i class="fas fa-list-check"></i> Audit Log</a>
+      <a href="#" data-tab="notif"  data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-bell"></i> Notifications</a>
+      <a href="#" data-tab="perms"  data-roles="Admin"><i class="fas fa-key"></i> Permissions</a>
+      <a href="#" data-tab="audit"  data-roles="Admin,Security_Officer"><i class="fas fa-list-check"></i> Audit Log</a>
     </nav>
   </div>
 </div>
 
-<!-- ── Main ── -->
 <div class="main">
   <header>
     <h1 id="page-title"><i class="fas fa-shield-halved"></i> CRIDA Phase 2 API Test Harness</h1>
@@ -83,8 +81,6 @@
         </div>
         <div class="form-group">
           <label>Email</label>
-          <!-- seed_2.sql: n=5 → role_id=(5%5)+1=1 (Admin). Password is 'hash' before
-               setup_database.sql runs, then 'Admin@1234' after it updates the bcrypt hash. -->
           <input id="login-email" type="email" value="officer5@crida.pk" placeholder="officer@crida.pk">
         </div>
         <div class="form-group">
@@ -92,8 +88,8 @@
           <input id="login-pass" type="password" value="hash" placeholder="Password">
         </div>
         <div class="form-group" style="font-size:0.78rem;color:var(--text-muted)">
-          Default (seed_2 only): <code>officer5@crida.pk</code> / <code>hash</code><br>
-          After running setup_database.sql: same email / <code>Admin@1234</code>
+          Default: <code>officer5@crida.pk</code> / <code>hash</code> (Admin)<br>
+          After setup_database.sql: same email / <code>Admin@1234</code>
         </div>
         <button onclick="doLogin()" class="btn btn-primary btn-block">
           <i class="fas fa-sign-in-alt"></i> Login
@@ -203,7 +199,7 @@
     </div>
   </div>
 
-  <!-- WATCHLIST (separate tab — needs watchlist_type which is NOT NULL in schema) -->
+  <!-- WATCHLIST -->
   <div id="tab-watchlist" class="tab-content">
     <div class="card">
       <h3><i class="fas fa-eye"></i> Watchlist</h3>
@@ -213,10 +209,7 @@
       </div>
       <div id="add-watchlist-form" style="display:none;margin-bottom:14px">
         <div class="form-row">
-          <div class="form-group">
-            <label>Citizen ID</label>
-            <input id="wl-cid" type="number" placeholder="Citizen ID">
-          </div>
+          <div class="form-group"><label>Citizen ID</label><input id="wl-cid" type="number" placeholder="Citizen ID"></div>
           <div class="form-group">
             <label>Watchlist Type</label>
             <select id="wl-type">
@@ -226,10 +219,7 @@
               <option value="Court Order">Court Order</option>
             </select>
           </div>
-          <div class="form-group">
-            <label>Expiry Date (optional)</label>
-            <input id="wl-expiry" type="date">
-          </div>
+          <div class="form-group"><label>Expiry Date (optional)</label><input id="wl-expiry" type="date"></div>
         </div>
         <div class="form-group">
           <label>Reason</label>
@@ -246,23 +236,15 @@
     <div class="card">
       <h3><i class="fas fa-edit"></i> Citizen Self-Update Requests</h3>
       <div class="form-row">
-        <div class="form-group">
-          <label>Citizen ID</label>
-          <input id="upd-cid" type="number" value="7">
-        </div>
+        <div class="form-group"><label>Citizen ID</label><input id="upd-cid" type="number" value="7"></div>
         <div class="form-group">
           <label>Field to Update</label>
           <select id="upd-field">
-            <option>first_name</option>
-            <option>last_name</option>
-            <option>blood_group</option>
-            <option>marital_status</option>
+            <option>first_name</option><option>last_name</option>
+            <option>blood_group</option><option>marital_status</option>
           </select>
         </div>
-        <div class="form-group">
-          <label>New Value</label>
-          <input id="upd-value" placeholder="New value">
-        </div>
+        <div class="form-group"><label>New Value</label><input id="upd-value" placeholder="New value"></div>
       </div>
       <div class="form-group">
         <label>Reason</label>
@@ -310,7 +292,7 @@
         </div>
         <div class="form-group" style="flex:1">
           <label>Verify — Fingerprint Hash</label>
-          <input id="bio-fp" placeholder="e.g. testfp7">
+          <input id="bio-fp" placeholder="e.g. fp7">
           <button onclick="verifyFingerprint()" class="btn btn-primary btn-block"><i class="fas fa-fingerprint"></i> Verify Fingerprint</button>
         </div>
       </div>
@@ -330,18 +312,9 @@
   <div id="tab-complaints" class="tab-content">
     <div class="card">
       <h3><i class="fas fa-exclamation-circle"></i> Complaints</h3>
-      <div class="form-group">
-        <label>Citizen ID</label>
-        <input id="comp-cid" type="number" value="7" style="max-width:120px">
-      </div>
-      <div class="form-group">
-        <label>Subject</label>
-        <input id="comp-subject" placeholder="Brief subject">
-      </div>
-      <div class="form-group">
-        <label>Description</label>
-        <textarea id="comp-desc" rows="3" placeholder="Full description..."></textarea>
-      </div>
+      <div class="form-group"><label>Citizen ID</label><input id="comp-cid" type="number" value="7" style="max-width:120px"></div>
+      <div class="form-group"><label>Subject</label><input id="comp-subject" placeholder="Brief subject"></div>
+      <div class="form-group"><label>Description</label><textarea id="comp-desc" rows="3" placeholder="Full description..."></textarea></div>
       <div class="btn-row">
         <button onclick="submitComplaint()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Complaint</button>
         <button onclick="loadComplaints()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
@@ -356,9 +329,7 @@
       <h3><i class="fas fa-bell"></i> Notifications</h3>
       <div class="toolbar">
         <input id="notif-cid" type="number" placeholder="Citizen ID (optional)">
-        <label class="checkbox-label">
-          <input id="notif-unread" type="checkbox"> Unread only
-        </label>
+        <label class="checkbox-label"><input id="notif-unread" type="checkbox"> Unread only</label>
         <button onclick="loadNotifications()" class="btn btn-primary"><i class="fas fa-sync"></i> Load</button>
         <button onclick="loadUnreadCount()" class="btn btn-secondary"><i class="fas fa-hashtag"></i> Unread Count</button>
       </div>
@@ -372,10 +343,7 @@
     <div class="card">
       <h3><i class="fas fa-key"></i> Permission Management (Admin Only)</h3>
       <div class="form-row">
-        <div class="form-group">
-          <label>Officer ID</label>
-          <input id="perm-oid" type="number" value="2">
-        </div>
+        <div class="form-group"><label>Officer ID</label><input id="perm-oid" type="number" value="2"></div>
         <div class="form-group">
           <label>Permission</label>
           <select id="perm-name">
@@ -404,7 +372,7 @@
       <h3><i class="fas fa-list-check"></i> Audit Log</h3>
       <div class="toolbar">
         <input id="audit-officer" type="number" placeholder="Officer ID">
-        <input id="audit-table"   placeholder="Table name (e.g. Citizen)">
+        <input id="audit-table-input" placeholder="Table name (e.g. Citizen)">
         <select id="audit-action" style="padding:8px 11px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text)">
           <option value="">All actions</option>
           <option>INSERT</option><option>UPDATE</option>

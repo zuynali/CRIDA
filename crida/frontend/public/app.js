@@ -2,6 +2,17 @@ const API = "http://localhost:5000/api/v1";
 let TOKEN  = localStorage.getItem("crida_token") || null;
 let OFFICER = null;
 
+// ── Role-based tab visibility ─────────────────────────────────────────────
+// Called after every login. Reads data-roles on each nav link and hides
+// links (and their tab panels) that the current role is not allowed to see.
+function applyRoleVisibility(roleName) {
+  document.querySelectorAll("[data-tab][data-roles]").forEach(link => {
+    const allowed = link.dataset.roles;
+    const visible = allowed === "all" || allowed.split(",").includes(roleName);
+    link.style.display = visible ? "" : "none";
+  });
+}
+
 // ── Tab navigation ────────────────────────────────────────────────────────
 document.querySelectorAll("[data-tab]").forEach(link => {
   link.addEventListener("click", e => {
@@ -69,6 +80,10 @@ async function doLogin() {
     document.getElementById("user-name").textContent = OFFICER.full_name;
     document.getElementById("user-role").textContent  = OFFICER.role_name;
     document.getElementById("user-info").classList.remove("hidden");
+
+    // Apply role-based nav visibility BEFORE switching tabs
+    applyRoleVisibility(OFFICER.role_name);
+
     toast("Welcome, " + OFFICER.full_name + "!", "ok");
     document.querySelector("[data-tab='dashboard']").click();
     loadDashboard();
@@ -81,6 +96,12 @@ async function doLogin() {
 function logout() {
   TOKEN = null; OFFICER = null;
   localStorage.removeItem("crida_token");
+
+  // Restore all nav links visibility for the next login
+  document.querySelectorAll("[data-tab][data-roles]").forEach(link => {
+    link.style.display = "";
+  });
+
   document.querySelector("[data-tab='login']").click();
   document.getElementById("user-info").classList.add("hidden");
   toast("Logged out", "warn");
@@ -88,20 +109,18 @@ function logout() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 async function loadDashboard() {
-  // Audit endpoint requires Admin or Security_Officer.
-  // Other roles get 403 — show "N/A" gracefully instead of breaking the dashboard.
   const [cr, nr, ar] = await Promise.all([
     req("GET", "/citizens/?limit=1"),
     req("GET", "/notifications/unread-count"),
     req("GET", "/audit/?limit=1")
   ]);
   const stats = [
-    { n: cr.ok ? (cr.data.total || "—") : "—",          l: "Total Citizens" },
-    { n: OFFICER?.role_name || "—",                      l: "Your Role" },
-    { n: OFFICER?.access_level || "—",                   l: "Access Level" },
-    { n: nr.ok ? (nr.data.unread_count ?? "—") : "—",   l: "Unread Alerts" },
-    { n: ar.ok ? (ar.data.total || "—") : "N/A",         l: "Audit Entries" },
-    { n: "MySQL 8.0",                                     l: "Database" },
+    { n: cr.ok ? (cr.data.total || "—") : "—",         l: "Total Citizens" },
+    { n: OFFICER?.role_name || "—",                     l: "Your Role" },
+    { n: OFFICER?.access_level || "—",                  l: "Access Level" },
+    { n: nr.ok ? (nr.data.unread_count ?? "—") : "—",  l: "Unread Alerts" },
+    { n: ar.ok ? (ar.data.total || "—") : "N/A",        l: "Audit Entries" },
+    { n: "MySQL 8.0",                                    l: "Database" },
   ];
   document.getElementById("stats-grid").innerHTML = stats.map(s =>
     `<div class="stat-card">
@@ -114,7 +133,9 @@ async function loadDashboard() {
 
 // ── Citizens ──────────────────────────────────────────────────────────────
 async function loadCitizens(search = "") {
-  const url = search ? `/citizens/?search=${encodeURIComponent(search)}&limit=30` : "/citizens/?limit=30";
+  const url = search
+    ? `/citizens/?search=${encodeURIComponent(search)}&limit=30`
+    : "/citizens/?limit=30";
   const r = await req("GET", url);
   const div = document.getElementById("citizens-table");
   if (!r.ok) { div.innerHTML = `<p style="color:var(--danger)">Error: ${r.data.error}</p>`; return; }
@@ -150,7 +171,7 @@ async function generatePDF() {
     a.href = url; a.download = `${type}_${id}.pdf`; a.click();
     msg.className = "msg-box ok";
     msg.textContent = `PDF downloaded: ${type}_${id}.pdf`;
-    acidLog(`PDF generated: ${type} for ID ${id} — ACID transaction logged`);
+    acidLog(`PDF generated: ${type} for ID ${id}`);
     toast("PDF downloaded!", "ok");
   } catch (e) {
     msg.className = "msg-box err";
@@ -171,8 +192,10 @@ async function loadFamilyTree() {
        <span class="badge">${d.citizen?.gender}</span> &nbsp;
        <span class="badge ${d.citizen?.status === 'active' ? 'success' : 'danger'}">${d.citizen?.status}</span>
     </p>
-    ${d.spouse ? `<p style="margin-top:8px">&#128141; Spouse: <strong>${d.spouse.spouse_name}</strong> (ID: ${d.spouse.spouse_id}) — ${d.spouse.marriage_date?.substring(0,16)}</p>` : "<p style='margin-top:8px;color:var(--text-muted)'>No spouse on record</p>"}
-    <p style="margin:10px 0 6px;color:var(--text-muted);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.06em">${d.tree_summary?.total_relations} relations found</p>
+    ${d.spouse
+      ? `<p style="margin-top:8px">&#128141; Spouse: <strong>${d.spouse.spouse_name}</strong> (ID: ${d.spouse.spouse_id})</p>`
+      : "<p style='margin-top:8px;color:var(--text-muted)'>No spouse on record</p>"}
+    <p style="margin:10px 0 6px;color:var(--text-muted);font-size:0.78rem">${d.tree_summary?.total_relations} relations found</p>
     <div>`;
   (d.relationships || []).forEach(rel => {
     html += `<div class="tree-node">
@@ -231,7 +254,7 @@ async function addCriminalRecord() {
 async function loadWatchlist() {
   const r   = await req("GET", "/security/watchlist");
   const div = document.getElementById("watchlist-table");
-  if (!r.ok) { div.innerHTML = `<p style="color:var(--text-muted)">Watchlist requires Security Officer or Admin role.</p>`; return; }
+  if (!r.ok) { div.innerHTML = `<p style="color:var(--text-muted)">Requires Security Officer or Admin role.</p>`; return; }
   const rows = r.data.watchlist || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>Watchlist is empty.</p>"; return; }
   div.innerHTML = `<table style="margin-top:14px">
@@ -255,14 +278,14 @@ function showAddWatchlist() {
 async function addToWatchlist() {
   const expiry = document.getElementById("wl-expiry").value || undefined;
   const r = await req("POST", "/security/watchlist", {
-    citizen_id:    parseInt(document.getElementById("wl-cid").value),
-    reason:        document.getElementById("wl-reason").value,
+    citizen_id:     parseInt(document.getElementById("wl-cid").value),
+    reason:         document.getElementById("wl-reason").value,
     watchlist_type: document.getElementById("wl-type").value,
     ...(expiry ? { expiry_date: expiry } : {})
   });
   if (r.ok) {
     toast("Added to watchlist", "ok");
-    acidLog(`WATCHLIST entry ${r.data.watchlist_id} added — type: ${document.getElementById("wl-type").value}`);
+    acidLog(`WATCHLIST entry ${r.data.watchlist_id} added`);
     loadWatchlist();
   } else toast("Error: " + r.data.error, "err");
 }
@@ -277,7 +300,7 @@ async function submitUpdateRequest() {
   });
   if (r.ok) {
     toast("Update request submitted (Pending)", "ok");
-    acidLog("UPDATE_REQUEST submitted — awaiting officer approval (ACID: Pending state)");
+    acidLog("UPDATE_REQUEST submitted — awaiting officer approval");
     loadUpdateRequests();
   } else toast("Error: " + r.data.error, "err");
 }
@@ -307,7 +330,7 @@ async function loadUpdateRequests() {
 async function approveRequest(rid) {
   const r = await req("PUT", `/update-requests/${rid}/approve`);
   if (r.ok) {
-    toast("Request approved — citizen updated!", "ok");
+    toast("Request approved!", "ok");
     acidLog(`UPDATE_REQUEST ${rid} APPROVED → Citizen UPDATE + Audit_Log — COMMIT`);
     loadUpdateRequests();
   } else toast("Error: " + r.data.error, "err");
@@ -336,10 +359,8 @@ async function capturePhoto() {
   canvas.getContext("2d").drawImage(video, 0, 0, 320, 240);
   const base64 = canvas.toDataURL("image/jpeg");
   const cid    = document.getElementById("cam-cid").value;
-  const r      = await req("POST", "/camera/capture", {
-    citizen_id: parseInt(cid), image: base64
-  });
-  const div = document.getElementById("cam-result");
+  const r      = await req("POST", "/camera/capture", { citizen_id: parseInt(cid), image: base64 });
+  const div    = document.getElementById("cam-result");
   if (r.ok) {
     div.innerHTML = `<div class="msg-box ok" style="display:block;margin-top:10px">
       Photo captured!<br>
@@ -482,7 +503,7 @@ async function loadPermissions() {
   const r   = await req("GET", "/permissions/");
   const div = document.getElementById("perms-table");
   if (!r.ok) {
-    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Permission list requires Admin role.</p>`;
+    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Requires Admin role.</p>`;
     return;
   }
   const rows = r.data.permissions || [];
@@ -529,11 +550,9 @@ async function revokePermission() {
 }
 
 // ── Audit Log ─────────────────────────────────────────────────────────────
-// The Audit_Log column is `timestamp` (defined in SQL_Scripting.sql).
-// seed_2.sql does NOT rename it — queries use `timestamp` throughout.
 async function loadAuditLog() {
   const oid    = document.getElementById("audit-officer").value;
-  const tbl    = document.getElementById("audit-table").value;
+  const tbl    = document.getElementById("audit-table-input").value;
   const action = document.getElementById("audit-action").value;
   let url = "/audit/?limit=30";
   if (oid)    url += `&officer_id=${oid}`;
@@ -542,7 +561,7 @@ async function loadAuditLog() {
   const r   = await req("GET", url);
   const div = document.getElementById("audit-table-div");
   if (!r.ok) {
-    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Audit log requires Admin or Security Officer role.</p>`;
+    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Requires Admin or Security Officer role.</p>`;
     return;
   }
   const rows = r.data.logs || [];
@@ -571,6 +590,7 @@ window.addEventListener("load", async () => {
       document.getElementById("user-name").textContent = OFFICER.full_name;
       document.getElementById("user-role").textContent  = OFFICER.role_name;
       document.getElementById("user-info").classList.remove("hidden");
+      applyRoleVisibility(OFFICER.role_name);
       document.querySelector("[data-tab='dashboard']").click();
       loadDashboard();
     } else {
