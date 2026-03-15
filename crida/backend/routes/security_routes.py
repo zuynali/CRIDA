@@ -11,7 +11,9 @@ security_bp = Blueprint("security", __name__)
 # Schema reference:
 # Criminal_Record: record_id, citizen_id, case_number, offense, offense_date,
 #                  conviction_date, sentence, status, court_name
-# Watchlist: watchlist_id, citizen_id, reason, added_date, added_by, status (if exists)
+# Watchlist: watchlist_id, citizen_id, reason, added_date (DEFAULT), added_by (NOT NULL),
+#            watchlist_type ENUM('Security','Fraud','Immigration','Court Order') NOT NULL,
+#            expiry_date NULL
 
 
 @security_bp.route("/criminal-records", methods=["GET"])
@@ -57,6 +59,10 @@ def add_criminal_record():
     ok, err = require_fields(data, "citizen_id", "offense", "offense_date", "status")
     if not ok:
         return jsonify({"error": err}), 400
+
+    valid_statuses = ('Charged', 'On Trial', 'Convicted', 'Acquitted')
+    if data["status"] not in valid_statuses:
+        return jsonify({"error": f"status must be one of {valid_statuses}"}), 400
 
     citizen = execute_query(
         "SELECT citizen_id FROM Citizen WHERE citizen_id = %s",
@@ -120,9 +126,14 @@ def get_watchlist():
 @permission_required("manage_security")
 def add_to_watchlist():
     data = request.json or {}
-    ok, err = require_fields(data, "citizen_id", "reason")
+    # watchlist_type is NOT NULL with no default — must be supplied
+    ok, err = require_fields(data, "citizen_id", "reason", "watchlist_type")
     if not ok:
         return jsonify({"error": err}), 400
+
+    valid_types = ('Security', 'Fraud', 'Immigration', 'Court Order')
+    if data["watchlist_type"] not in valid_types:
+        return jsonify({"error": f"watchlist_type must be one of {valid_types}"}), 400
 
     citizen = execute_query(
         "SELECT citizen_id FROM Citizen WHERE citizen_id = %s",
@@ -130,16 +141,11 @@ def add_to_watchlist():
     if not citizen:
         return jsonify({"error": "Citizen not found"}), 404
 
-    # Get Watchlist columns dynamically — try with added_by first
-    try:
-        wid = execute_query(
-            """INSERT INTO Watchlist (citizen_id, reason, added_by)
-               VALUES (%s, %s, %s)""",
-            (data["citizen_id"], data["reason"], g.officer["officer_id"]))
-    except Exception:
-        # Fallback if added_by column doesn't exist
-        wid = execute_query(
-            "INSERT INTO Watchlist (citizen_id, reason) VALUES (%s, %s)",
-            (data["citizen_id"], data["reason"]))
+    wid = execute_query(
+        """INSERT INTO Watchlist
+               (citizen_id, reason, added_by, watchlist_type, expiry_date)
+           VALUES (%s, %s, %s, %s, %s)""",
+        (data["citizen_id"], data["reason"], g.officer["officer_id"],
+         data["watchlist_type"], data.get("expiry_date")))
 
     return jsonify({"message": "Added to watchlist", "watchlist_id": wid}), 201

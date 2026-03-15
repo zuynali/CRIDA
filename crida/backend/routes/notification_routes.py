@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, g
 from db import execute_query
 from middleware.auth import token_required
+from middleware.rbac import role_required   # moved to top-level import
 
 notification_bp = Blueprint("notifications", __name__)
 
@@ -53,9 +54,9 @@ def unread_count():
 
 @notification_bp.route("/send", methods=["POST"])
 @token_required
+@role_required("Admin")          # was missing — any officer could send notifications
 def send_manual_notification():
-    """Admin endpoint to manually send a notification."""
-    from middleware.rbac import role_required
+    """Admin-only endpoint to manually send a notification."""
     from utils.notifications import send_notification
     from utils.validators import require_fields
     data = request.json or {}

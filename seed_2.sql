@@ -115,7 +115,7 @@ SELECT citizen_id,citizen_id,'2015-01-01',NULL
 FROM Citizen;
 
 -- =========================
--- FAMILY RELATIONSHIPS (PAIRS)
+-- FAMILY RELATIONSHIPS
 -- =========================
 
 INSERT INTO Family_Relationship (citizen_id,related_citizen_id,relationship_type)
@@ -138,7 +138,7 @@ FROM Citizen
 WHERE citizen_id <= 50;
 
 -- =========================
--- MARRIAGES (VALID AGE/GENDER)
+-- MARRIAGES
 -- =========================
 
 INSERT INTO Marriage_Registration
@@ -155,7 +155,9 @@ AND c2.gender='Female'
 AND c1.citizen_id <= 50;
 
 -- =========================
--- CNIC APPLICATIONS
+-- CNIC APPLICATIONS + CARDS
+-- The trigger create_cnic_card_on_approval only fires on UPDATE, not INSERT,
+-- so we must bulk-insert the cards explicitly to match the Approved applications.
 -- =========================
 
 INSERT INTO CNIC_Application
@@ -163,8 +165,19 @@ INSERT INTO CNIC_Application
 SELECT citizen_id,'New','Approved',(citizen_id % 5)+1
 FROM Citizen;
 
+INSERT INTO CNIC_Card (citizen_id, card_number, issue_date, expiry_date, card_status, fingerprint_verified)
+SELECT citizen_id,
+       CONCAT('CNIC-', LPAD(citizen_id, 6, '0'), '-2026'),
+       CURDATE(),
+       DATE_ADD(CURDATE(), INTERVAL 10 YEAR),
+       'Active',
+       TRUE
+FROM Citizen;
+
 -- =========================
--- PASSPORT APPLICATIONS
+-- PASSPORT APPLICATIONS + PASSPORTS
+-- Passports are inserted BEFORE the watchlist so the
+-- block_watchlist_documents trigger does not block them.
 -- =========================
 
 INSERT INTO Passport_Application
@@ -182,7 +195,7 @@ FROM Citizen
 WHERE citizen_id <= 70;
 
 -- =========================
--- DRIVING LICENSE APPLICATIONS
+-- DRIVING LICENSE APPLICATIONS + LICENSES
 -- =========================
 
 INSERT INTO Driving_License_Application
@@ -233,7 +246,7 @@ FROM Citizen
 WHERE citizen_id <= 30;
 
 -- =========================
--- WATCHLIST
+-- WATCHLIST (inserted AFTER passports to avoid trigger conflict)
 -- =========================
 
 INSERT INTO Watchlist
@@ -303,7 +316,8 @@ citizen_id,
 FROM Citizen;
 
 -- =========================
--- DEATH REGISTRATION
+-- DEATH REGISTRATIONS
+-- Trigger update_citizen_status_on_death sets these citizens to 'deceased'
 -- =========================
 
 INSERT INTO Death_Registration
@@ -317,15 +331,3 @@ CONCAT('DEATH-',citizen_id)
 FROM (SELECT citizen_id FROM Citizen WHERE citizen_id BETWEEN 95 AND 99) AS tmp;
 
 DROP TEMPORARY TABLE seq;
-
-
-SELECT * FROM Family_Relationship
-where related_citizen_id = 12;
-
-SELECT * FROM CitizenProfile_View;
-SELECT * FROM CNIC_Application;
-
-
-DESCRIBE audit_log;
-ALTER TABLE Audit_Log 
-CHANGE COLUMN timestamp action_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;

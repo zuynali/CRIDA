@@ -10,9 +10,14 @@ cnic_bp = Blueprint("cnic", __name__)
 
 # Schema reference:
 # CNIC_Application: application_id, citizen_id, application_type, submission_date,
-#                   status (Pending/Under Review/Approved/Rejected), office_id, rejection_reason
-# NOTE: NO fee_paid column on CNIC_Application
-
+#                   status (Pending/Under Review/Approved/Rejected), office_id,
+#                   rejection_reason
+# CNIC_Card: card_id, citizen_id (UNIQUE), card_number, issue_date, expiry_date,
+#            card_status, fingerprint_verified
+# NOTE: citizen_id is UNIQUE in CNIC_Card. Trigger create_cnic_card_on_approval
+#       fires AFTER UPDATE on CNIC_Application when status changes to 'Approved'.
+#       For Renewal/Replacement, the old card must be removed first so the trigger
+#       can INSERT a fresh one without hitting the UNIQUE constraint.
 
 
 @cnic_bp.route("/", methods=["GET"])
@@ -105,7 +110,16 @@ def approve_cnic(app_id):
         return jsonify({"error": f"Cannot approve application with status '{app['status']}'"}), 400
 
     def ops(conn, cursor):
-        # Trigger create_cnic_card_on_approval fires automatically on status=Approved
+        # For Renewal/Replacement: the trigger (create_cnic_card_on_approval) does a plain
+        # INSERT into CNIC_Card, but citizen_id is UNIQUE there. Remove the old card
+        # first so the trigger can insert a fresh one without a duplicate-key error.
+        # This entire block is inside one transaction — if anything fails, the delete
+        # is rolled back too, leaving the old card intact.
+        if app["application_type"] in ("Renewal", "Replacement"):
+            cursor.execute(
+                "DELETE FROM CNIC_Card WHERE citizen_id = %s", (app["citizen_id"],))
+
+        # The trigger create_cnic_card_on_approval fires automatically on this UPDATE
         cursor.execute(
             "UPDATE CNIC_Application SET status = 'Approved' WHERE application_id = %s",
             (app_id,))
@@ -117,7 +131,9 @@ def approve_cnic(app_id):
         return True
 
     execute_transaction_custom(ops)
-    return jsonify({"message": "CNIC application approved. CNIC card created by trigger."}), 200
+    return jsonify({
+        "message": "CNIC application approved. CNIC card created by trigger."
+    }), 200
 
 
 @cnic_bp.route("/<int:app_id>/reject", methods=["PUT"])

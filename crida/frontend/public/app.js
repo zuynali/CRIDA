@@ -88,18 +88,23 @@ function logout() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 async function loadDashboard() {
+  // Audit endpoint (/audit/) requires Admin or Security_Officer.
+  // Run all three in parallel; if audit returns 403 for lower-privilege roles,
+  // show "—" for that stat instead of breaking the whole dashboard.
   const [cr, nr, ar] = await Promise.all([
     req("GET", "/citizens/?limit=1"),
     req("GET", "/notifications/unread-count"),
     req("GET", "/audit/?limit=1")
   ]);
+
   const stats = [
-    { n: cr.data.total || "—",          l: "Total Citizens" },
-    { n: OFFICER?.role_name || "—",     l: "Your Role" },
-    { n: OFFICER?.access_level || "—",  l: "Access Level" },
-    { n: nr.data.unread_count ?? "—",   l: "Unread Alerts" },
-    { n: ar.data.total || "—",          l: "Audit Entries" },
-    { n: "MySQL 8.0",                   l: "Database" },
+    { n: cr.ok ? (cr.data.total || "—") : "—",          l: "Total Citizens" },
+    { n: OFFICER?.role_name || "—",                      l: "Your Role" },
+    { n: OFFICER?.access_level || "—",                   l: "Access Level" },
+    { n: nr.ok ? (nr.data.unread_count ?? "—") : "—",   l: "Unread Alerts" },
+    // Audit count only available to Admin / Security_Officer (access_level >= 4)
+    { n: ar.ok ? (ar.data.total || "—") : "N/A",         l: "Audit Entries" },
+    { n: "MySQL 8.0",                                     l: "Database" },
   ];
   document.getElementById("stats-grid").innerHTML = stats.map(s =>
     `<div class="stat-card">
@@ -439,6 +444,10 @@ async function markRead(nid) {
 async function loadPermissions() {
   const r   = await req("GET", "/permissions/");
   const div = document.getElementById("perms-table");
+  if (!r.ok) {
+    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Permission list requires Admin role.</p>`;
+    return;
+  }
   const rows = r.data.permissions || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>No permissions granted yet.</p>"; return; }
   div.innerHTML = `<table style="margin-top:14px">
@@ -493,6 +502,10 @@ async function loadAuditLog() {
   if (action) url += `&action_type=${action}`;
   const r   = await req("GET", url);
   const div = document.getElementById("audit-table-div");
+  if (!r.ok) {
+    div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Audit log requires Admin or Security Officer role.</p>`;
+    return;
+  }
   const rows = r.data.logs || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>No logs found.</p>"; return; }
   div.innerHTML = `<p style="margin-bottom:8px;color:var(--text-muted);font-size:0.78rem">Total: ${r.data.total} entries</p>

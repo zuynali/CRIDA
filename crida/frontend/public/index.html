@@ -82,10 +82,12 @@
         </div>
         <div class="form-group">
           <label>Email</label>
-          <input id="login-email" type="email" value="admin@crida.pk" placeholder="officer@crida.pk">
+          <!-- officer1@crida.pk is the first Admin account created by seed_2.sql -->
+          <input id="login-email" type="email" value="officer1@crida.pk" placeholder="officer@crida.pk">
         </div>
         <div class="form-group">
           <label>Password</label>
+          <!-- Default password from seed_2.sql; becomes Admin@1234 after setup_database.sql -->
           <input id="login-pass" type="password" value="hash" placeholder="Password">
         </div>
         <button onclick="doLogin()" class="btn btn-primary btn-block">
@@ -265,7 +267,7 @@
         </div>
         <div class="form-group" style="flex:1">
           <label>Verify — Fingerprint Hash</label>
-          <input id="bio-fp" placeholder="e.g. testfp7">
+          <input id="bio-fp" placeholder="e.g. fp7">
           <button onclick="verifyFingerprint()" class="btn btn-primary btn-block"><i class="fas fa-fingerprint"></i> Verify Fingerprint</button>
         </div>
       </div>
