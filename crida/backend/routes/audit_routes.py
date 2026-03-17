@@ -73,3 +73,4 @@ def get_audit_log(lid):
     if not row:
         return jsonify({"error": "Log entry not found"}), 404
     return jsonify({"log": row}), 200
+
