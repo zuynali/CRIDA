@@ -70,3 +70,27 @@ curl http://localhost:5000/api/v1/health
 | Passport_Officer | 3 | Passports |
 | License_Officer | 3 | Driving Licenses |
 | Security_Officer | 4 | Watchlist, Criminal Records |
+
+
+
+
+
+
+# For Windows
+# 1. Navigate to the backend directory
+cd CRIDA\Phase-1\crida\backend
+
+# 2. Create a Python virtual environment
+python -m venv venv
+
+# 3. Activate the virtual environment
+#    For Command Prompt:
+venv\Scripts\activate
+#    For PowerShell:
+.\venv\Scripts\Activate
+
+# 4. Install the required Python packages
+pip install -r requirements.txt
+
+# 5. Run the Flask application
+python app.py
