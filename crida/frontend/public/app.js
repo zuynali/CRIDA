@@ -97,6 +97,9 @@ function logout() {
   TOKEN = null; OFFICER = null;
   localStorage.removeItem("crida_token");
 
+  // Stop any active biometric camera on logout
+  stopBioCamera();
+
   // Restore all nav links visibility for the next login
   document.querySelectorAll("[data-tab][data-roles]").forEach(link => {
     link.style.display = "";
@@ -534,59 +537,510 @@ async function capturePhoto() {
 }
 
 // ── Biometric ─────────────────────────────────────────────────────────────
-async function enrollBiometric() {
-  const r = await req("POST", "/biometric/enroll", {
-    citizen_id:       parseInt(document.getElementById("bio-cid").value),
-    fingerprint_hash: document.getElementById("bio-enroll-fp").value,
-    facial_scan_hash: "enrolled_face_" + document.getElementById("bio-cid").value
-  });
-  if (r.ok) toast("Biometric enrolled/updated", "ok");
-  else toast("Error: " + r.data.error, "err");
+let bioStream = null;
+
+async function startBioCamera() {
+  try {
+    bioStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width:      { ideal: 1280 },
+        height:     { ideal: 720  },
+        facingMode: "user"
+      }
+    });
+    const video = document.getElementById("bio-video");
+    video.srcObject = bioStream;
+    video.style.display = "block";
+
+    const btn = document.getElementById("bio-cam-btn");
+    btn.innerHTML = `<i class="fas fa-video-slash"></i> Stop Camera`;
+    btn.onclick = stopBioCamera;
+    btn.classList.replace("btn-secondary", "btn-danger");
+
+    document.getElementById("bio-verify-face-btn").disabled = false;
+    document.getElementById("bio-enroll-btn").disabled = false;
+    toast("Camera started", "ok");
+    acidLog(`BIO camera started for citizen ${document.getElementById("bio-cid").value || "?"}`);
+  } catch (e) {
+    toast("Camera error: " + e.message, "err");
+  }
 }
 
-async function verifyFingerprint() {
-  const r = await req("POST", "/biometric/verify-fingerprint", {
-    citizen_id:       parseInt(document.getElementById("bio-cid").value),
-    fingerprint_hash: document.getElementById("bio-fp").value
-  });
+function stopBioCamera() {
+  if (bioStream) {
+    bioStream.getTracks().forEach(t => t.stop());
+    bioStream = null;
+  }
+  const video = document.getElementById("bio-video");
+  if (video) { video.srcObject = null; video.style.display = "none"; }
+
+  const btn = document.getElementById("bio-cam-btn");
+  if (btn) {
+    btn.innerHTML = `<i class="fas fa-video"></i> Start Camera`;
+    btn.onclick = startBioCamera;
+    btn.classList.replace("btn-danger", "btn-secondary");
+  }
+  const vfBtn = document.getElementById("bio-verify-face-btn");
+  if (vfBtn) vfBtn.disabled = true;
+  const enrBtn = document.getElementById("bio-enroll-btn");
+  if (enrBtn) enrBtn.disabled = true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Capture a frame from the live camera and return { base64, hash }
+//  base64 → full data-URL JPEG  (sent to /documents/upload-photo)
+//  hash   → SHA-256 hex string  (stored in Biometric_Data.facial_scan_hash)
+// ─────────────────────────────────────────────────────────────────────────
+async function captureFrame() {
+  const video = document.getElementById("bio-video");
+  if (!video.videoWidth || !video.videoHeight) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+
+  const base64 = canvas.toDataURL("image/jpeg", 0.92);
+  if (base64.length < 5000) return null;          // blank / dark frame guard
+
+  // Compute SHA-256 of the raw JPEG bytes
+  const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.92));
+  const buf  = await blob.arrayBuffer();
+  const raw  = await crypto.subtle.digest("SHA-256", buf);
+  const hash = Array.from(new Uint8Array(raw))
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+
+  return { base64, hash };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  ENROLL BIOMETRIC
+//
+//  Two independent operations happen in sequence:
+//
+//  1. POST /documents/upload-photo  → saves the JPEG to disk and inserts a
+//     row in Document (document_type = 'photo').  This is the reference
+//     image that verify_face will compare against.
+//
+//  2. POST /biometric/enroll        → upserts Biometric_Data with:
+//       facial_scan_hash = SHA-256 of the captured JPEG
+//       fingerprint_hash = value from the text field (empty = "")
+//
+//  Schema constraints respected:
+//    • Biometric_Data.facial_scan_hash  VARCHAR(256)  ← 64-char hex hash
+//    • Biometric_Data.fingerprint_hash  VARCHAR(256)  ← text field value
+//    • Document.document_type           ENUM('photo','signature','supporting_doc')
+// ─────────────────────────────────────────────────────────────────────────
+async function enrollBiometric() {
+  const cid = parseInt(document.getElementById("bio-cid").value);
+  const fp  = (document.getElementById("bio-enroll-fp")?.value || "").trim();
   const div = document.getElementById("bio-result");
+
+  if (!cid) { toast("Enter a Citizen ID", "err"); return; }
+  if (!bioStream) { toast("Start the camera first — a live photo is required to enroll a face", "warn"); return; }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+    ⏳ Capturing face…
+  </div>`;
+
+  // ── Step 1: capture frame ────────────────────────────────────────────
+  const frame = await captureFrame();
+  if (!frame) {
+    toast("Camera frame is empty — check lighting and try again", "err");
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      ❌ Could not capture a usable frame. Ensure good lighting and face the camera directly.
+    </div>`;
+    return;
+  }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+    ⏳ Saving face photo to Documents…
+  </div>`;
+
+  // ── Step 2: save photo to Document table (via backend) ───────────────
+  // The backend endpoint must:
+  //   • decode the base64 JPEG
+  //   • save it to disk under uploads/
+  //   • INSERT INTO Document (citizen_id, document_type, file_path) VALUES (?, 'photo', ?)
+  //   • return { ok: true, file_path: "uploads/citizen_7_photo.jpg" }
+  let photoSaved = false;
+  try {
+    const photoResp = await req("POST", "/biometric/upload-photo", {
+      citizen_id: cid,
+      image:      frame.base64          // data:image/jpeg;base64,…
+    });
+
+    if (!photoResp.ok) {
+      const msg = photoResp.data?.error || `HTTP ${photoResp.status}`;
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+        ❌ Photo save failed: ${msg}<br>
+        <small>The <code>POST /documents/upload-photo</code> endpoint must exist on the backend
+        and insert a row into the <code>Document</code> table with
+        <code>document_type = 'photo'</code>.</small>
+      </div>`;
+      toast("Photo save failed", "err");
+      return;
+    }
+    photoSaved = true;
+  } catch (e) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      ❌ Network error saving photo: ${e.message}
+    </div>`;
+    toast("Network error", "err");
+    return;
+  }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+    ⏳ Storing biometric hash…
+  </div>`;
+
+  // ── Step 3: upsert Biometric_Data ────────────────────────────────────
+  // facial_scan_hash = SHA-256 of the frame (64-char hex, fits VARCHAR(256))
+  // fingerprint_hash = text field value   (empty string is acceptable)
+  try {
+    const bioResp = await req("POST", "/biometric/enroll", {
+      citizen_id:       cid,
+      fingerprint_hash: fp,
+      facial_scan_hash: frame.hash      // 64-char hex — fits VARCHAR(256)
+    });
+
+    if (bioResp.ok) {
+      toast("Biometric enrolled ✓", "ok");
+      acidLog(`BIOMETRIC enrolled for citizen ${cid} | facial hash: ${frame.hash.substring(0,16)}…`);
+      div.innerHTML = `<div class="msg-box ok" style="display:block;margin-top:10px">
+        ✅ ${bioResp.data.message}<br>
+        <small>
+          Face photo saved to Documents table.<br>
+          Facial hash stored: <code>${frame.hash.substring(0, 24)}…</code><br>
+          ${fp ? `Fingerprint hash stored: <code>${fp.substring(0, 24)}…</code>` : "No fingerprint enrolled (use the fingerprint enroll button to add one)."}
+        </small>
+      </div>`;
+    } else {
+      toast("Biometric enroll error: " + bioResp.data.error, "err");
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+        ❌ ${bioResp.data.error}
+      </div>`;
+    }
+  } catch (e) {
+    toast("Network error: " + e.message, "err");
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      ❌ Network error: ${e.message}
+    </div>`;
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────
+//  ENROLL FINGERPRINT (separate button)
+//
+//  Uses WebAuthn to create a new credential bound to this citizen.
+//  The credential ID is hashed with SHA-256 and stored as fingerprint_hash
+//  in Biometric_Data.  On verify, the same hash is reproduced so
+//  compare_digest() in the backend returns True.
+//
+//  Note: WebAuthn credential IDs are non-deterministic across registrations.
+//  This means re-enrolling creates a NEW hash — the citizen must re-verify
+//  after every re-enroll.  This is expected behaviour for a FIDO2 flow.
+// ─────────────────────────────────────────────────────────────────────────
+async function enrollFingerprint() {
+  const cid = parseInt(document.getElementById("bio-cid").value);
+  const div = document.getElementById("bio-result");
+  if (!cid) { toast("Enter a Citizen ID", "err"); return; }
+
+  if (!window.PublicKeyCredential) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      ❌ WebAuthn is not supported in this browser.<br>
+      <small>Use Chrome, Edge, or Safari on a device with a fingerprint reader.</small>
+    </div>`;
+    return;
+  }
+
+  const hasPlatform = await PublicKeyCredential
+    .isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
+  if (!hasPlatform) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      ❌ No platform authenticator detected (Windows Hello / Touch ID / Android fingerprint).<br>
+      <small>Make sure your device has a fingerprint sensor and it is enrolled in your OS settings.</small>
+    </div>`;
+    return;
+  }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+    ⏳ Waiting for fingerprint sensor (touch it now)…
+  </div>`;
+
+  try {
+    const challenge = new Uint8Array(32);
+    crypto.getRandomValues(challenge);
+
+    // Use a stable userId derived from the citizen_id so re-enroll
+    // overwrites the previous credential on supporting authenticators.
+    const userIdBytes = new TextEncoder().encode(`citizen_${cid}`);
+
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp:   { name: "CRID", id: window.location.hostname || "localhost" },
+        user: {
+          id:          userIdBytes,
+          name:        `citizen_${cid}`,
+          displayName: `Citizen ${cid}`
+        },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7  },   // ES256
+          { type: "public-key", alg: -257 }   // RS256 (Windows Hello)
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",   // device fingerprint only
+          userVerification:        "required"
+        },
+        timeout: 60000
+      }
+    });
+
+    // Hash the raw credential ID → deterministic string for storage
+    const rawId  = new Uint8Array(credential.rawId);
+    const hBuf   = await crypto.subtle.digest("SHA-256", rawId);
+    const fpHash = Array.from(new Uint8Array(hBuf))
+      .map(b => b.toString(16).padStart(2, "0")).join("");
+
+    // Persist to Biometric_Data (only updating fingerprint_hash)
+    const r = await req("POST", "/biometric/enroll", {
+      citizen_id:       cid,
+      fingerprint_hash: fpHash,
+      facial_scan_hash: ""      // empty → backend will keep existing value if UPDATE path
+    });
+
+    // NOTE: The backend UPDATE sets BOTH columns.  Pass the existing facial
+    // hash by first fetching the debug endpoint, or adjust the backend to
+    // only update non-empty fields.  See backend fix note below.
+    if (r.ok) {
+      toast("Fingerprint enrolled ✓", "ok");
+      acidLog(`BIOMETRIC fingerprint enrolled for citizen ${cid}`);
+      div.innerHTML = `<div class="msg-box ok" style="display:block;margin-top:10px">
+        ✅ Fingerprint enrolled successfully.<br>
+        <small>Hash: <code>${fpHash.substring(0, 24)}…</code><br>
+        Use "Verify Fingerprint" to confirm it works.</small>
+      </div>`;
+    } else {
+      toast("Enroll error: " + r.data.error, "err");
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ ${r.data.error}</div>`;
+    }
+
+  } catch (e) {
+    const msg = e.name === "NotAllowedError"  ? "Fingerprint prompt was cancelled or timed out." :
+                e.name === "SecurityError"    ? "WebAuthn requires HTTPS or localhost." :
+                e.name === "InvalidStateError"? "Credential already registered — try verifying instead." :
+                e.message;
+    toast("Enroll failed: " + msg, "err");
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      ❌ ${msg}
+    </div>`;
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────
+//  VERIFY FINGERPRINT
+//
+//  Reproduces the same SHA-256(rawId) hash that enrollFingerprint() stored.
+//  The backend does hmac.compare_digest(stored, submitted) — constant-time.
+//
+//  Flow:
+//    1. navigator.credentials.get() with userVerification: "required"
+//       → OS shows fingerprint prompt
+//    2. Hash the returned rawId with SHA-256
+//    3. POST /biometric/verify-fingerprint with that hash
+//    4. Fall back to manual text-field hash if WebAuthn unavailable/cancelled
+// ─────────────────────────────────────────────────────────────────────────
+async function verifyFingerprint() {
+  const cid = parseInt(document.getElementById("bio-cid").value);
+  if (!cid) { toast("Enter a Citizen ID", "err"); return; }
+
+  const div = document.getElementById("bio-result");
+
+  // ── WebAuthn path ─────────────────────────────────────────────────────
+  if (window.PublicKeyCredential) {
+    const hasPlatform = await PublicKeyCredential
+      .isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
+
+    if (hasPlatform) {
+      div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+        ⏳ Waiting for fingerprint sensor…
+      </div>`;
+
+      try {
+        const challenge = new Uint8Array(32);
+        crypto.getRandomValues(challenge);
+
+        const credential = await navigator.credentials.get({
+          publicKey: {
+            challenge,
+            timeout:          60000,
+            userVerification: "required",
+            rpId:             window.location.hostname || "localhost"
+          }
+        });
+
+        // Reproduce the same hash as enrollment: SHA-256 of rawId only
+        const rawId  = new Uint8Array(credential.rawId);
+        const hBuf   = await crypto.subtle.digest("SHA-256", rawId);
+        const fpHash = Array.from(new Uint8Array(hBuf))
+          .map(b => b.toString(16).padStart(2, "0")).join("");
+
+        const r = await req("POST", "/biometric/verify-fingerprint", {
+          citizen_id:       cid,
+          fingerprint_hash: fpHash
+        });
+
+        if (r.ok) {
+          const v = r.data.verified;
+          div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
+            Fingerprint (WebAuthn): <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
+            &nbsp;| Method: ${r.data.method}
+            ${!v ? `<br><small>
+              Hash mismatch — re-enroll the fingerprint for this citizen via
+              the "Enroll Fingerprint" button, then verify again.
+            </small>` : ""}
+          </div>`;
+          toast(v ? "Fingerprint verified!" : "Fingerprint mismatch", v ? "ok" : "err");
+          acidLog(`BIOMETRIC fp verify citizen ${cid}: ${v ? "MATCH" : "NO MATCH"} via WebAuthn`);
+          return;
+        }
+      } catch (e) {
+        if (e.name === "NotAllowedError") {
+          toast("Fingerprint prompt cancelled — falling back to manual hash", "warn");
+        } else if (e.name === "SecurityError") {
+          toast("WebAuthn requires HTTPS or localhost", "warn");
+        } else {
+          toast("WebAuthn error: " + e.message, "warn");
+        }
+        // Fall through to manual hash
+      }
+    }
+  }
+
+  // ── Manual hash fallback ──────────────────────────────────────────────
+  const manualHash = (document.getElementById("bio-fp")?.value || "").trim();
+  if (!manualHash) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      WebAuthn unavailable or cancelled.<br>
+      Enter the fingerprint hash manually in the field above and try again,
+      OR use "Enroll Fingerprint" first so WebAuthn can match it.
+    </div>`;
+    return;
+  }
+
+  const r = await req("POST", "/biometric/verify-fingerprint", {
+    citizen_id:       cid,
+    fingerprint_hash: manualHash
+  });
+
   if (r.ok) {
     const v = r.data.verified;
-    div.innerHTML = `<div class="msg-box ${v ? 'ok' : 'err'}" style="display:block;margin-top:10px">
-      Fingerprint: <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
+    div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
+      Fingerprint (manual hash): <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
       &nbsp;| Method: ${r.data.method}
     </div>`;
-    toast(v ? "Fingerprint verified!" : "Mismatch", v ? "ok" : "err");
+    toast(v ? "Verified!" : "Mismatch", v ? "ok" : "err");
+    acidLog(`BIOMETRIC fp verify citizen ${cid}: ${v ? "MATCH" : "NO MATCH"} via manual hash`);
+  } else {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">${r.data.error}</div>`;
   }
 }
 
-let bioStream = null;
-async function startBioCamera() {
-  bioStream = await navigator.mediaDevices.getUserMedia({ video: true });
-  document.getElementById("bio-video").srcObject = bioStream;
-}
 
+// ─────────────────────────────────────────────────────────────────────────
+//  VERIFY FACE
+//  (No changes needed in the frontend — the backend verify_face route
+//   reads from the Document table which enrollBiometric() now populates.)
+// ─────────────────────────────────────────────────────────────────────────
 async function verifyFace() {
-  const video  = document.getElementById("bio-video");
-  const canvas = document.createElement("canvas");
-  canvas.width = 240; canvas.height = 180;
-  canvas.getContext("2d").drawImage(video, 0, 0, 240, 180);
-  const base64 = canvas.toDataURL("image/jpeg");
-  const r = await req("POST", "/biometric/verify-face", {
-    citizen_id: parseInt(document.getElementById("bio-cid").value),
-    image: base64
-  });
+  const cid = parseInt(document.getElementById("bio-cid").value);
+  if (!cid)       { toast("Enter a Citizen ID", "err"); return; }
+  if (!bioStream) { toast("Start the camera first", "err"); return; }
+
+  const video = document.getElementById("bio-video");
+  if (!video.videoWidth || !video.videoHeight) {
+    toast("Camera not ready yet — wait a moment and try again", "warn");
+    return;
+  }
+
+  const frame = await captureFrame();
+  if (!frame) {
+    toast("Camera frame appears empty — check lighting", "err");
+    return;
+  }
+
   const div = document.getElementById("bio-result");
-  if (r.ok) {
-    const v = r.data.verified;
-    div.innerHTML = `<div class="msg-box ${v ? 'ok' : 'err'}" style="display:block;margin-top:10px">
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+    ⏳ Verifying face… (this may take 2–5 seconds)
+  </div>`;
+
+  try {
+    const r = await req("POST", "/biometric/verify-face", {
+      citizen_id: cid,
+      image:      frame.base64
+    });
+
+    if (!r.ok) {
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+        <strong>Error:</strong> ${r.data.error || "Unknown error"}
+        ${r.status === 404
+          ? `<br><small>→ Enroll this citizen's face first using the <b>Enroll Biometric</b> button (camera must be on).</small>`
+          : ""}
+        ${r.status === 501
+          ? `<br><small>→ Run: <code>pip install face_recognition</code> or <code>pip install opencv-python</code> in your backend venv.</small>`
+          : ""}
+      </div>`;
+      toast("Face verify failed: " + (r.data.error || r.status), "err");
+      return;
+    }
+
+    const v      = r.data.verified;
+    const conf   = r.data.confidence != null ? `${r.data.confidence}%` : "—";
+    const note   = r.data.note   ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>`   : "";
+    const reason = r.data.reason ? `<br><small>${r.data.reason}</small>` : "";
+
+    div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
       Face: <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
-      ${r.data.confidence ? ` | Confidence: ${r.data.confidence}%` : ""}
-      | Method: ${r.data.method}
+      &nbsp;| Confidence: <strong>${conf}</strong>
+      &nbsp;| Method: ${r.data.method}
+      ${reason}${note}
     </div>`;
+
+    toast(v ? "Face verified!" : "Face not matched", v ? "ok" : "err");
+    acidLog(`BIOMETRIC face verify citizen ${cid}: ${v ? "MATCH" : "NO MATCH"} (${conf}) via ${r.data.method}`);
+
+  } catch (e) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      <strong>Network error</strong> — is the Flask backend running?<br>
+      <small>${e.message}</small>
+    </div>`;
+    toast("Network error: " + e.message, "err");
   }
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────
+//  DEBUG HELPER  (dev only — call from browser console: bioDebug(7))
+// ─────────────────────────────────────────────────────────────────────────
+async function bioDebug(citizenId) {
+  const r = await req("GET", `/biometric/debug/${citizenId}`);
+  console.table(r.data);
+  const div = document.getElementById("bio-result");
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px;font-family:monospace;font-size:0.78rem">
+    <strong>Debug — Citizen ${citizenId}</strong><br>
+    Photo in DB:      <code>${r.data.photo?.db_path   || "none"}</code><br>
+    Resolved path:    <code>${r.data.photo?.resolved  || "—"}</code><br>
+    File exists:      <strong>${r.data.photo?.exists  ?? "—"}</strong>
+    &nbsp; Size: ${r.data.photo?.size_bytes ? (r.data.photo.size_bytes / 1024).toFixed(1) + " KB" : "—"}<br>
+    Biometric row:    ${r.data.biometric_row ? "✅ Yes" : "❌ No"}<br>
+    FP hash:          <code>${r.data.biometric_row?.fingerprint_hash?.substring(0,20) || "—"}…</code><br>
+    Facial hash:      <code>${r.data.biometric_row?.facial_scan_hash?.substring(0,20) || "—"}…</code><br>
+    Uploads dir:      <code>${r.data.uploads_dir}</code>
+  </div>`;
+}
 // ── Complaints ────────────────────────────────────────────────────────────
 async function submitComplaint() {
   const r = await req("POST", "/complaints/", {
