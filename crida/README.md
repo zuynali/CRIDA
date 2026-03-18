@@ -22,6 +22,7 @@ Then seed the data:
 ```bash
 sudo mysql -u root -p CRID < seed_2.sql
 ```
+sudo mysql -u root -p CRID/crida < Update_names.sql
 
 ### Step 2 — Backend
 
