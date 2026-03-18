@@ -352,39 +352,38 @@ code { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent2); 
 /* ── Checkbox label ── */
 .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 0.84rem; color: var(--text-muted); cursor: pointer; }
 
-
-
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-
 /* ── Floating Chatbot Button ── */
 .fab-chatbot {
   position: fixed;
-  bottom: 30px;
-  right: 30px;
+  bottom: 70px;
+  right: 20px;
   z-index: 9999;
   background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
   color: #fff;
-  border-radius: 50px;
-  padding: 14px 24px;
+  border-radius: 40px;
+  padding: 12px 20px;
   display: flex;
   align-items: center;
   gap: 10px;
   font-family: var(--font-body);
-  font-weight: 600;
+  font-weight: 400;
   font-size: 1rem;
   text-decoration: none;
-  box-shadow: 0 8px 25px rgba(37, 117, 252, 0.4);
+  box-shadow: 0 7px 20px rgba(37, 117, 252, 0.4);
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
   cursor: pointer;
 }
-.fab-chatbot i { font-size: 1.4rem; }
+.fab-chatbot i { font-size: 1.25rem; }
 .fab-chatbot:hover {
   transform: translateY(-5px);
   box-shadow: 0 12px 30px rgba(37, 117, 252, 0.6);
   color: #fff;
 }
 .fab-chatbot:active { transform: translateY(0); }
+
+
