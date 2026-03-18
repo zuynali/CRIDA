@@ -3,6 +3,17 @@ const path    = require("path");
 const app     = express();
 
 app.use(express.json());
+
+// Required for getUserMedia (camera) and WebAuthn to work.
+// Browsers enforce these APIs only on secure contexts (HTTPS or localhost).
+// These headers enable the SharedArrayBuffer API and tighten origin isolation —
+// harmless on localhost, required if you ever deploy behind a reverse proxy.
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy",   "same-origin");
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("*", (req, res) => {

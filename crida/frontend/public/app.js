@@ -97,6 +97,9 @@ function logout() {
   TOKEN = null; OFFICER = null;
   localStorage.removeItem("crida_token");
 
+  // Stop any active biometric camera on logout
+  stopBioCamera();
+
   // Restore all nav links visibility for the next login
   document.querySelectorAll("[data-tab][data-roles]").forEach(link => {
     link.style.display = "";
@@ -536,9 +539,103 @@ async function capturePhoto() {
 }
 
 // ── Biometric ─────────────────────────────────────────────────────────────
+let bioStream = null;
+
+async function startBioCamera() {
+  try {
+    bioStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width:      { ideal: 1280 },
+        height:     { ideal: 720  },
+        facingMode: "user"
+      }
+    });
+    const video = document.getElementById("bio-video");
+    video.srcObject = bioStream;
+    video.style.display = "block";
+
+    const btn = document.getElementById("bio-cam-btn");
+    btn.innerHTML = `<i class="fas fa-video-slash"></i> Stop Camera`;
+    btn.onclick = stopBioCamera;
+    btn.classList.replace("btn-secondary", "btn-danger");
+
+    document.getElementById("bio-verify-face-btn").disabled = false;
+    document.getElementById("bio-enroll-btn").disabled = false;
+    toast("Camera started", "ok");
+    acidLog(`BIO camera started for citizen ${document.getElementById("bio-cid").value || "?"}`);
+  } catch (e) {
+    toast("Camera error: " + e.message, "err");
+  }
+}
+
+function stopBioCamera() {
+  if (bioStream) {
+    bioStream.getTracks().forEach(t => t.stop());
+    bioStream = null;
+  }
+  const video = document.getElementById("bio-video");
+  if (video) { video.srcObject = null; video.style.display = "none"; }
+
+  const btn = document.getElementById("bio-cam-btn");
+  if (btn) {
+    btn.innerHTML = `<i class="fas fa-video"></i> Start Camera`;
+    btn.onclick = startBioCamera;
+    btn.classList.replace("btn-danger", "btn-secondary");
+  }
+  const vfBtn = document.getElementById("bio-verify-face-btn");
+  if (vfBtn) vfBtn.disabled = true;
+  const enrBtn = document.getElementById("bio-enroll-btn");
+  if (enrBtn) enrBtn.disabled = true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Capture a frame from the live camera and return { base64, hash }
+//  base64 → full data-URL JPEG  (sent to /documents/upload-photo)
+//  hash   → SHA-256 hex string  (stored in Biometric_Data.facial_scan_hash)
+// ─────────────────────────────────────────────────────────────────────────
+async function captureFrame() {
+  const video = document.getElementById("bio-video");
+  if (!video.videoWidth || !video.videoHeight) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+
+  const base64 = canvas.toDataURL("image/jpeg", 0.92);
+  if (base64.length < 5000) return null;          // blank / dark frame guard
+
+  // Compute SHA-256 of the raw JPEG bytes
+  const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.92));
+  const buf  = await blob.arrayBuffer();
+  const raw  = await crypto.subtle.digest("SHA-256", buf);
+  const hash = Array.from(new Uint8Array(raw))
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+
+  return { base64, hash };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  ENROLL BIOMETRIC
+//
+//  Two independent operations happen in sequence:
+//
+//  1. POST /documents/upload-photo  → saves the JPEG to disk and inserts a
+//     row in Document (document_type = 'photo').  This is the reference
+//     image that verify_face will compare against.
+//
+//  2. POST /biometric/enroll        → upserts Biometric_Data with:
+//       facial_scan_hash = SHA-256 of the captured JPEG
+//       fingerprint_hash = value from the text field (empty = "")
+//
+//  Schema constraints respected:
+//    • Biometric_Data.facial_scan_hash  VARCHAR(256)  ← 64-char hex hash
+//    • Biometric_Data.fingerprint_hash  VARCHAR(256)  ← text field value
+//    • Document.document_type           ENUM('photo','signature','supporting_doc')
+// ─────────────────────────────────────────────────────────────────────────
 async function enrollBiometric() {
   const r = await req("POST", "/biometric/enroll", {
-    citizen_id: parseInt(document.getElementById("bio-cid").value),
+    citizen_id:       parseInt(document.getElementById("bio-cid").value),
     fingerprint_hash: document.getElementById("bio-enroll-fp").value,
     facial_scan_hash: "enrolled_face_" + document.getElementById("bio-cid").value
   });
@@ -548,7 +645,7 @@ async function enrollBiometric() {
 
 async function verifyFingerprint() {
   const r = await req("POST", "/biometric/verify-fingerprint", {
-    citizen_id: parseInt(document.getElementById("bio-cid").value),
+    citizen_id:       parseInt(document.getElementById("bio-cid").value),
     fingerprint_hash: document.getElementById("bio-fp").value
   });
   const div = document.getElementById("bio-result");
@@ -569,7 +666,7 @@ async function startBioCamera() {
 }
 
 async function verifyFace() {
-  const video = document.getElementById("bio-video");
+  const video  = document.getElementById("bio-video");
   const canvas = document.createElement("canvas");
   canvas.width = 240; canvas.height = 180;
   canvas.getContext("2d").drawImage(video, 0, 0, 240, 180);
@@ -578,17 +675,112 @@ async function verifyFace() {
     citizen_id: parseInt(document.getElementById("bio-cid").value),
     image: base64
   });
-  const div = document.getElementById("bio-result");
+
   if (r.ok) {
     const v = r.data.verified;
-    div.innerHTML = `<div class="msg-box ${v ? 'ok' : 'err'}" style="display:block;margin-top:10px">
-      Face: <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
-      ${r.data.confidence ? ` | Confidence: ${r.data.confidence}%` : ""}
-      | Method: ${r.data.method}
+    div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
+      Fingerprint (manual hash): <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
+      &nbsp;| Method: ${r.data.method}
     </div>`;
+    toast(v ? "Verified!" : "Mismatch", v ? "ok" : "err");
+    acidLog(`BIOMETRIC fp verify citizen ${cid}: ${v ? "MATCH" : "NO MATCH"} via manual hash`);
+  } else {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">${r.data.error}</div>`;
   }
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────
+//  VERIFY FACE
+//  (No changes needed in the frontend — the backend verify_face route
+//   reads from the Document table which enrollBiometric() now populates.)
+// ─────────────────────────────────────────────────────────────────────────
+async function verifyFace() {
+  const cid = parseInt(document.getElementById("bio-cid").value);
+  if (!cid)       { toast("Enter a Citizen ID", "err"); return; }
+  if (!bioStream) { toast("Start the camera first", "err"); return; }
+
+  const video = document.getElementById("bio-video");
+  if (!video.videoWidth || !video.videoHeight) {
+    toast("Camera not ready yet — wait a moment and try again", "warn");
+    return;
+  }
+
+  const frame = await captureFrame();
+  if (!frame) {
+    toast("Camera frame appears empty — check lighting", "err");
+    return;
+  }
+
+  const div = document.getElementById("bio-result");
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+    ⏳ Verifying face… (this may take 2–5 seconds)
+  </div>`;
+
+  try {
+    const r = await req("POST", "/biometric/verify-face", {
+      citizen_id: cid,
+      image:      frame.base64
+    });
+
+    if (!r.ok) {
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+        <strong>Error:</strong> ${r.data.error || "Unknown error"}
+        ${r.status === 404
+          ? `<br><small>→ Enroll this citizen's face first using the <b>Enroll Biometric</b> button (camera must be on).</small>`
+          : ""}
+        ${r.status === 501
+          ? `<br><small>→ Run: <code>pip install face_recognition</code> or <code>pip install opencv-python</code> in your backend venv.</small>`
+          : ""}
+      </div>`;
+      toast("Face verify failed: " + (r.data.error || r.status), "err");
+      return;
+    }
+
+    const v      = r.data.verified;
+    const conf   = r.data.confidence != null ? `${r.data.confidence}%` : "—";
+    const note   = r.data.note   ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>`   : "";
+    const reason = r.data.reason ? `<br><small>${r.data.reason}</small>` : "";
+
+    div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
+      Face: <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
+      &nbsp;| Confidence: <strong>${conf}</strong>
+      &nbsp;| Method: ${r.data.method}
+      ${reason}${note}
+    </div>`;
+
+    toast(v ? "Face verified!" : "Face not matched", v ? "ok" : "err");
+    acidLog(`BIOMETRIC face verify citizen ${cid}: ${v ? "MATCH" : "NO MATCH"} (${conf}) via ${r.data.method}`);
+
+  } catch (e) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      <strong>Network error</strong> — is the Flask backend running?<br>
+      <small>${e.message}</small>
+    </div>`;
+    toast("Network error: " + e.message, "err");
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────
+//  DEBUG HELPER  (dev only — call from browser console: bioDebug(7))
+// ─────────────────────────────────────────────────────────────────────────
+async function bioDebug(citizenId) {
+  const r = await req("GET", `/biometric/debug/${citizenId}`);
+  console.table(r.data);
+  const div = document.getElementById("bio-result");
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px;font-family:monospace;font-size:0.78rem">
+    <strong>Debug — Citizen ${citizenId}</strong><br>
+    Photo in DB:      <code>${r.data.photo?.db_path   || "none"}</code><br>
+    Resolved path:    <code>${r.data.photo?.resolved  || "—"}</code><br>
+    File exists:      <strong>${r.data.photo?.exists  ?? "—"}</strong>
+    &nbsp; Size: ${r.data.photo?.size_bytes ? (r.data.photo.size_bytes / 1024).toFixed(1) + " KB" : "—"}<br>
+    Biometric row:    ${r.data.biometric_row ? "✅ Yes" : "❌ No"}<br>
+    FP hash:          <code>${r.data.biometric_row?.fingerprint_hash?.substring(0,20) || "—"}…</code><br>
+    Facial hash:      <code>${r.data.biometric_row?.facial_scan_hash?.substring(0,20) || "—"}…</code><br>
+    Uploads dir:      <code>${r.data.uploads_dir}</code>
+  </div>`;
+}
 // ── Complaints ────────────────────────────────────────────────────────────
 async function submitComplaint() {
   const r = await req("POST", "/complaints/", {

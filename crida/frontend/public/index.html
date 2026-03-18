@@ -281,30 +281,70 @@
   <div id="tab-biometric" class="tab-content">
     <div class="card">
       <h3><i class="fas fa-fingerprint"></i> Biometric Verification</h3>
+
+      <!-- Citizen ID -->
       <div class="form-group">
         <label>Citizen ID</label>
         <input id="bio-cid" type="number" value="7" style="max-width:120px">
       </div>
+
+      <!-- Enroll + Fingerprint row -->
       <div class="form-row">
+
+        <!-- Enroll -->
         <div class="form-group" style="flex:1">
-          <label>Enroll — Fingerprint Hash</label>
-          <input id="bio-enroll-fp" placeholder="e.g. fp7_new">
-          <button onclick="enrollBiometric()" class="btn btn-secondary btn-block"><i class="fas fa-plus-circle"></i> Enroll</button>
+          <label>Enroll — Fingerprint Hash <span style="font-size:0.75rem;color:var(--text-muted)">(optional if using WebAuthn)</span></label>
+          <input id="bio-enroll-fp" placeholder="e.g. fp7_new  — leave blank to use WebAuthn credential">
+          <button onclick="enrollBiometric()" class="btn btn-secondary btn-block" style="margin-top:6px">
+            <i class="fas fa-plus-circle"></i> Enroll Biometric
+          </button>
+          <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
+            Start the camera below first to enroll a real facial scan hash.
+          </p>
         </div>
+
+        <!-- Verify Fingerprint -->
         <div class="form-group" style="flex:1">
-          <label>Verify — Fingerprint Hash</label>
-          <input id="bio-fp" placeholder="e.g. fp7">
-          <button onclick="verifyFingerprint()" class="btn btn-primary btn-block"><i class="fas fa-fingerprint"></i> Verify Fingerprint</button>
+          <label>Verify Fingerprint</label>
+          <input id="bio-fp" placeholder="Hash fallback — leave blank to use WebAuthn">
+          <button onclick="verifyFingerprint()" class="btn btn-primary btn-block" style="margin-top:6px">
+            <i class="fas fa-fingerprint"></i> Verify Fingerprint
+          </button>
+          <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
+            Tries device biometric (Windows Hello / Touch ID) first, then falls back to hash above.
+          </p>
         </div>
+
       </div>
+
+      <!-- Live Face Verification -->
       <div class="form-group" style="margin-top:16px">
-        <label>Live Face Verification (camera)</label>
-        <video id="bio-video" autoplay playsinline width="240" height="180"></video>
+        <label>Live Face Verification</label>
+
+        <!-- Video — hidden until camera starts -->
+        <video id="bio-video" autoplay playsinline width="320" height="240"
+               style="display:none; border-radius:6px; margin-bottom:8px; border:1px solid var(--border)">
+        </video>
+
         <div class="btn-row">
-          <button onclick="startBioCamera()" class="btn btn-secondary btn-sm"><i class="fas fa-video"></i> Start Camera</button>
-          <button onclick="verifyFace()" class="btn btn-primary btn-sm"><i class="fas fa-user-check"></i> Verify Face</button>
+          <!-- id + onclick wired to startBioCamera / stopBioCamera via JS toggle -->
+          <button id="bio-cam-btn" class="btn btn-secondary btn-sm" onclick="startBioCamera()">
+            <i class="fas fa-video"></i> Start Camera
+          </button>
+          <!-- disabled until camera is live -->
+          <button id="bio-verify-face-btn" class="btn btn-primary btn-sm"
+                  onclick="verifyFace()" disabled>
+            <i class="fas fa-user-check"></i> Verify Face
+          </button>
         </div>
+
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
+          Start the camera, position your face, then click Verify Face.
+          Requires a stored photo for this citizen (uploaded via Camera Capture tab).
+        </p>
       </div>
+
+      <!-- Result area -->
       <div id="bio-result"></div>
     </div>
   </div>
