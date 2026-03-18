@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,435 +8,477 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
+
 <body>
 
-<div class="sidebar">
-  <div class="logo">
-    <i class="fas fa-shield-halved"></i>
-    <span>CRIDA</span>
-  </div>
-
-  <div class="nav-section">
-    <div class="nav-label">System</div>
-    <nav>
-      <a href="#" data-tab="login" class="active"><i class="fas fa-sign-in-alt"></i> Login</a>
-      <a href="#" data-tab="dashboard" data-roles="all"><i class="fas fa-chart-pie"></i> Dashboard</a>
-    </nav>
-  </div>
-
-  <div class="nav-section">
-    <div class="nav-label">Citizens</div>
-    <nav>
-      <a href="#" data-tab="citizens" data-roles="all"><i class="fas fa-users"></i> Citizens</a>
-      <a href="#" data-tab="family"   data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-sitemap"></i> Family Tree</a>
-      <a href="#" data-tab="update"   data-roles="Admin,Registrar"><i class="fas fa-edit"></i> Update Requests</a>
-    </nav>
-  </div>
-
-  <div class="nav-section">
-    <div class="nav-label">Documents</div>
-    <nav>
-      <a href="#" data-tab="pdf"       data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-file-pdf"></i> PDF Generator</a>
-      <a href="#" data-tab="camera"    data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-camera"></i> Camera Capture</a>
-      <a href="#" data-tab="biometric" data-roles="Admin,Passport_Officer,License_Officer"><i class="fas fa-fingerprint"></i> Biometric</a>
-    </nav>
-  </div>
-
-  <div class="nav-section">
-    <div class="nav-label">Security</div>
-    <nav>
-      <a href="#" data-tab="criminal"   data-roles="Admin,Security_Officer"><i class="fas fa-gavel"></i> Criminal Records</a>
-      <a href="#" data-tab="watchlist"  data-roles="Admin,Security_Officer"><i class="fas fa-eye"></i> Watchlist</a>
-      <a href="#" data-tab="complaints" data-roles="Admin,Registrar"><i class="fas fa-exclamation-circle"></i> Complaints</a>
-    </nav>
-  </div>
-
-  <div class="nav-section">
-    <div class="nav-label">Admin</div>
-    <nav>
-      <a href="#" data-tab="notif"  data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-bell"></i> Notifications</a>
-      <a href="#" data-tab="perms"  data-roles="Admin"><i class="fas fa-key"></i> Permissions</a>
-      <a href="#" data-tab="audit"  data-roles="Admin,Security_Officer"><i class="fas fa-list-check"></i> Audit Log</a>
-    </nav>
-  </div>
-</div>
-
-<div class="main">
-  <header>
-    <h1 id="page-title"><i class="fas fa-shield-halved"></i> CRIDA Phase 2 API Test Harness</h1>
-    <div id="user-info" class="hidden">
-      <span id="user-name"></span>
-      <span id="user-role" class="badge info"></span>
-      <button onclick="logout()" class="btn btn-danger btn-sm"><i class="fas fa-sign-out-alt"></i> Logout</button>
-      
+  <div class="sidebar">
+    <div class="logo">
+      <i class="fas fa-shield-halved"></i>
+      <span>CRIDA</span>
     </div>
-  </header>
 
-  <!-- LOGIN -->
-  <div id="tab-login" class="tab-content active">
-    <div class="login-wrap">
-      <div class="login-card">
-        <div class="brand">
-          <i class="fas fa-shield-halved"></i>
-          <h2>CRIDA Officer Login</h2>
-          <p>Citizen Registration &amp; Identity Database Authority</p>
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input id="login-email" type="email" value="officer5@crida.pk" placeholder="officer@crida.pk">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input id="login-pass" type="password" value="hash" placeholder="Password">
-        </div>
-        <div class="form-group" style="font-size:0.78rem;color:var(--text-muted)">
-          Default: <code>officer5@crida.pk</code> / <code>hash</code> (Admin)<br>
-          After setup_database.sql: same email / <code>Admin@1234</code>
-        </div>
-        <button onclick="doLogin()" class="btn btn-primary btn-block">
-          <i class="fas fa-sign-in-alt"></i> Login
+    <div class="nav-section">
+      <div class="nav-label">System</div>
+      <nav>
+        <a href="#" data-tab="login" class="active"><i class="fas fa-sign-in-alt"></i> Login</a>
+        <a href="#" data-tab="dashboard" data-roles="all"><i class="fas fa-chart-pie"></i> Dashboard</a>
+      </nav>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Citizens</div>
+      <nav>
+        <a href="#" data-tab="citizens" data-roles="all"><i class="fas fa-users"></i> Citizens</a>
+        <a href="#" data-tab="family" data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-sitemap"></i>
+          Family Tree</a>
+        <a href="#" data-tab="update" data-roles="Admin,Registrar"><i class="fas fa-edit"></i> Update Requests</a>
+      </nav>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Documents</div>
+      <nav>
+        <a href="#" data-tab="pdf" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i
+            class="fas fa-file-pdf"></i> PDF Generator</a>
+        <a href="#" data-tab="camera" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i
+            class="fas fa-camera"></i> Camera Capture</a>
+        <a href="#" data-tab="biometric" data-roles="Admin,Passport_Officer,License_Officer"><i
+            class="fas fa-fingerprint"></i> Biometric</a>
+      </nav>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Security</div>
+      <nav>
+        <a href="#" data-tab="criminal" data-roles="Admin,Security_Officer"><i class="fas fa-gavel"></i> Criminal
+          Records</a>
+        <a href="#" data-tab="watchlist" data-roles="Admin,Security_Officer"><i class="fas fa-eye"></i> Watchlist</a>
+        <a href="#" data-tab="complaints" data-roles="Admin,Registrar"><i class="fas fa-exclamation-circle"></i>
+          Complaints</a>
+      </nav>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Admin</div>
+      <nav>
+        <a href="#" data-tab="notif" data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-bell"></i>
+          Notifications</a>
+        <a href="#" data-tab="perms" data-roles="Admin"><i class="fas fa-key"></i> Permissions</a>
+        <a href="#" data-tab="audit" data-roles="Admin,Security_Officer"><i class="fas fa-list-check"></i> Audit Log</a>
+      </nav>
+    </div>
+  </div>
+
+  <div class="main">
+    <header>
+      <h1 id="page-title"><i class="fas fa-shield-halved"></i> CRIDA Phase 2 API Test Harness</h1>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button id="theme-toggle" class="btn btn-secondary btn-sm" onclick="toggleTheme()" title="Toggle Theme" style="border-radius:50%; padding:6px 10px;">
+          <i class="fas fa-sun"></i>
         </button>
-        <div id="login-msg" class="msg-box"></div>
-      </div>
-    </div>
-  </div>
+        <div id="user-info" class="hidden">
+          <span id="user-name"></span>
+          <span id="user-role" class="badge info"></span>
+          <button onclick="logout()" class="btn btn-danger btn-sm"><i class="fas fa-sign-out-alt"></i> Logout</button>
 
-  <!-- DASHBOARD -->
-  <div id="tab-dashboard" class="tab-content">
-    <div class="stats-grid" id="stats-grid"></div>
-    <div class="card">
-      <h3><i class="fas fa-terminal"></i> ACID Transaction Log</h3>
-      <div id="acid-log" class="log-box">Waiting for transactions...</div>
-    </div>
-  </div>
-
-  <!-- CITIZENS -->
-  <div id="tab-citizens" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-users"></i> Citizens Registry</h3>
-      <div class="toolbar">
-        <input id="citizen-search" placeholder="Search name or national ID...">
-        <button onclick="searchCitizens()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-        <button onclick="loadCitizens()" class="btn btn-secondary"><i class="fas fa-sync"></i> Refresh</button>
-      </div>
-      <div id="citizens-table"></div>
-    </div>
-  </div>
-
-  <!-- PDF GENERATOR -->
-  <div id="tab-pdf" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-file-pdf"></i> Government Document PDF Generator</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Document Type</label>
-          <select id="pdf-type">
-            <option value="cnic">CNIC Card</option>
-            <option value="passport">Passport</option>
-            <option value="license">Driving License</option>
-            <option value="birth-certificate">Birth Certificate</option>
-            <option value="death-certificate">Death Certificate</option>
-            <option value="marriage-certificate">Marriage Certificate</option>
-            <option value="payment-slip">Payment Slip</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>ID (Citizen / Marriage / Payment)</label>
-          <input id="pdf-id" type="number" value="7" min="1">
         </div>
       </div>
-      <button onclick="generatePDF()" class="btn btn-primary">
-        <i class="fas fa-download"></i> Generate &amp; Download PDF
-      </button>
-      <div id="pdf-msg" class="msg-box"></div>
-    </div>
-  </div>
+    </header>
 
-  <!-- FAMILY TREE -->
-  <div id="tab-family" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-sitemap"></i> Family Tree Viewer</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Citizen ID</label>
-          <input id="family-cid" type="number" value="7" min="1">
-        </div>
-        <div class="form-group" style="flex:0">
-          <label>&nbsp;</label>
-          <button onclick="loadFamilyTree()" class="btn btn-primary"><i class="fas fa-search"></i> Load Tree</button>
-        </div>
-      </div>
-      <div id="family-result"></div>
-    </div>
-  </div>
-
-  <!-- CRIMINAL RECORDS -->
-  <div id="tab-criminal" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-gavel"></i> Criminal Records</h3>
-      <div class="toolbar">
-        <input id="criminal-cid" type="number" placeholder="Filter by Citizen ID (optional)">
-        <button onclick="loadCriminalRecords()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-        <button onclick="showAddCriminal()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Record</button>
-      </div>
-      <div id="add-criminal-form" style="display:none;margin-bottom:14px">
-        <div class="form-row">
-          <div class="form-group"><label>Citizen ID</label><input id="cr-cid" type="number"></div>
-          <div class="form-group"><label>Case Number</label><input id="cr-case" placeholder="CR-2026-001"></div>
-          <div class="form-group"><label>Offense</label><input id="cr-offense" placeholder="e.g. Fraud"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Offense Date</label><input id="cr-date" type="date"></div>
-          <div class="form-group"><label>Status</label>
-            <select id="cr-status">
-              <option>Charged</option><option>On Trial</option>
-              <option>Convicted</option><option>Acquitted</option>
-            </select>
+    <!-- LOGIN -->
+    <div id="tab-login" class="tab-content active">
+      <div class="login-wrap">
+        <div class="login-card">
+          <div class="brand">
+            <i class="fas fa-shield-halved"></i>
+            <h2>CRIDA Officer Login</h2>
+            <p>Citizen Registration &amp; Identity Database Authority</p>
           </div>
-          <div class="form-group"><label>Court</label><input id="cr-court" placeholder="Court name"></div>
-        </div>
-        <button onclick="addCriminalRecord()" class="btn btn-danger"><i class="fas fa-plus"></i> Submit Record</button>
-      </div>
-      <div id="criminal-table"></div>
-    </div>
-  </div>
-
-  <!-- WATCHLIST -->
-  <div id="tab-watchlist" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-eye"></i> Watchlist</h3>
-      <div class="toolbar">
-        <button onclick="loadWatchlist()" class="btn btn-primary"><i class="fas fa-sync"></i> Load Watchlist</button>
-        <button onclick="showAddWatchlist()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add to Watchlist</button>
-      </div>
-      <div id="add-watchlist-form" style="display:none;margin-bottom:14px">
-        <div class="form-row">
-          <div class="form-group"><label>Citizen ID</label><input id="wl-cid" type="number" placeholder="Citizen ID"></div>
           <div class="form-group">
-            <label>Watchlist Type</label>
-            <select id="wl-type">
-              <option value="Security">Security</option>
-              <option value="Fraud">Fraud</option>
-              <option value="Immigration">Immigration</option>
-              <option value="Court Order">Court Order</option>
+            <label>Email</label>
+            <input id="login-email" type="email" value="officer5@crida.pk" placeholder="officer@crida.pk">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input id="login-pass" type="password" value="hash" placeholder="Password">
+          </div>
+          <div class="form-group" style="font-size:0.78rem;color:var(--text-muted)">
+            Default: <code>officer5@crida.pk</code> / <code>hash</code> (Admin)<br>
+            After setup_database.sql: same email / <code>Admin@1234</code>
+          </div>
+          <button onclick="doLogin()" class="btn btn-primary btn-block">
+            <i class="fas fa-sign-in-alt"></i> Login
+          </button>
+          <div id="login-msg" class="msg-box"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="tab-dashboard" class="tab-content">
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="card">
+        <h3><i class="fas fa-terminal"></i> ACID Transaction Log</h3>
+        <div id="acid-log" class="log-box">Waiting for transactions...</div>
+      </div>
+    </div>
+
+    <!-- CITIZENS -->
+    <div id="tab-citizens" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-users"></i> Citizens Registry</h3>
+        <div class="toolbar">
+          <input id="citizen-search" placeholder="Search name or national ID...">
+          <button onclick="searchCitizens()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+          <button onclick="loadCitizens()" class="btn btn-secondary"><i class="fas fa-sync"></i> Refresh</button>
+        </div>
+        <div id="citizens-table"></div>
+      </div>
+    </div>
+
+    <!-- PDF GENERATOR -->
+    <div id="tab-pdf" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-file-pdf"></i> Government Document PDF Generator</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Document Type</label>
+            <select id="pdf-type">
+              <option value="cnic">CNIC Card</option>
+              <option value="passport">Passport</option>
+              <option value="license">Driving License</option>
+              <option value="birth-certificate">Birth Certificate</option>
+              <option value="death-certificate">Death Certificate</option>
+              <option value="marriage-certificate">Marriage Certificate</option>
+              <option value="payment-slip">Payment Slip</option>
             </select>
           </div>
-          <div class="form-group"><label>Expiry Date (optional)</label><input id="wl-expiry" type="date"></div>
+          <div class="form-group">
+            <label>ID (Citizen / Marriage / Payment)</label>
+            <input id="pdf-id" type="number" value="7" min="1">
+          </div>
+        </div>
+        <button onclick="generatePDF()" class="btn btn-primary">
+          <i class="fas fa-download"></i> Generate &amp; Download PDF
+        </button>
+        <div id="pdf-msg" class="msg-box"></div>
+      </div>
+    </div>
+
+    <!-- FAMILY TREE -->
+    <div id="tab-family" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-sitemap"></i> Family Tree Viewer</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Citizen ID</label>
+            <input id="family-cid" type="number" value="7" min="1">
+          </div>
+          <div class="form-group" style="flex:0">
+            <label>&nbsp;</label>
+            <button onclick="loadFamilyTree()" class="btn btn-primary"><i class="fas fa-search"></i> Load Tree</button>
+          </div>
+        </div>
+        <div id="family-result"></div>
+      </div>
+    </div>
+
+    <!-- CRIMINAL RECORDS -->
+    <div id="tab-criminal" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-gavel"></i> Criminal Records</h3>
+        <div class="toolbar">
+          <input id="criminal-cid" type="number" placeholder="Filter by Citizen ID (optional)">
+          <button onclick="loadCriminalRecords()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+          <button onclick="showAddCriminal()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Record</button>
+        </div>
+        <div id="add-criminal-form" style="display:none;margin-bottom:14px">
+          <div class="form-row">
+            <div class="form-group"><label>Citizen ID</label><input id="cr-cid" type="number"></div>
+            <div class="form-group"><label>Case Number</label><input id="cr-case" placeholder="CR-2026-001"></div>
+            <div class="form-group"><label>Offense</label><input id="cr-offense" placeholder="e.g. Fraud"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Offense Date</label><input id="cr-date" type="date"></div>
+            <div class="form-group"><label>Status</label>
+              <select id="cr-status">
+                <option>Charged</option>
+                <option>On Trial</option>
+                <option>Convicted</option>
+                <option>Acquitted</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Court</label><input id="cr-court" placeholder="Court name"></div>
+          </div>
+          <button onclick="addCriminalRecord()" class="btn btn-danger"><i class="fas fa-plus"></i> Submit
+            Record</button>
+        </div>
+        <div id="criminal-table"></div>
+      </div>
+    </div>
+
+    <!-- WATCHLIST -->
+    <div id="tab-watchlist" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-eye"></i> Watchlist</h3>
+        <div class="toolbar">
+          <button onclick="loadWatchlist()" class="btn btn-primary"><i class="fas fa-sync"></i> Load Watchlist</button>
+          <button onclick="showAddWatchlist()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add to
+            Watchlist</button>
+        </div>
+        <div id="add-watchlist-form" style="display:none;margin-bottom:14px">
+          <div class="form-row">
+            <div class="form-group"><label>Citizen ID</label><input id="wl-cid" type="number" placeholder="Citizen ID">
+            </div>
+            <div class="form-group">
+              <label>Watchlist Type</label>
+              <select id="wl-type">
+                <option value="Security">Security</option>
+                <option value="Fraud">Fraud</option>
+                <option value="Immigration">Immigration</option>
+                <option value="Court Order">Court Order</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Expiry Date (optional)</label><input id="wl-expiry" type="date"></div>
+          </div>
+          <div class="form-group">
+            <label>Reason</label>
+            <input id="wl-reason" placeholder="Reason for watchlisting" style="width:100%">
+          </div>
+          <button onclick="addToWatchlist()" class="btn btn-danger"><i class="fas fa-plus"></i> Add to
+            Watchlist</button>
+        </div>
+        <div id="watchlist-table"></div>
+      </div>
+    </div>
+
+    <!-- UPDATE REQUESTS -->
+    <div id="tab-update" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-edit"></i> Citizen Self-Update Requests</h3>
+        <div class="form-row">
+          <div class="form-group"><label>Citizen ID</label><input id="upd-cid" type="number" value="7"></div>
+          <div class="form-group">
+            <label>Field to Update</label>
+            <select id="upd-field">
+              <option>first_name</option>
+              <option>last_name</option>
+              <option>blood_group</option>
+              <option>marital_status</option>
+            </select>
+          </div>
+          <div class="form-group"><label>New Value</label><input id="upd-value" placeholder="New value"></div>
         </div>
         <div class="form-group">
           <label>Reason</label>
-          <input id="wl-reason" placeholder="Reason for watchlisting" style="width:100%">
+          <input id="upd-reason" placeholder="Reason for update request" style="width:100%">
         </div>
-        <button onclick="addToWatchlist()" class="btn btn-danger"><i class="fas fa-plus"></i> Add to Watchlist</button>
+        <div class="btn-row">
+          <button onclick="submitUpdateRequest()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit
+            Request</button>
+          <button onclick="loadUpdateRequests()" class="btn btn-secondary"><i class="fas fa-list"></i> View
+            Pending</button>
+        </div>
+        <div id="update-table"></div>
       </div>
-      <div id="watchlist-table"></div>
     </div>
-  </div>
 
-  <!-- UPDATE REQUESTS -->
-  <div id="tab-update" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-edit"></i> Citizen Self-Update Requests</h3>
-      <div class="form-row">
-        <div class="form-group"><label>Citizen ID</label><input id="upd-cid" type="number" value="7"></div>
+    <!-- CAMERA -->
+    <div id="tab-camera" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-camera"></i> Camera Capture + Background Removal</h3>
         <div class="form-group">
-          <label>Field to Update</label>
-          <select id="upd-field">
-            <option>first_name</option><option>last_name</option>
-            <option>blood_group</option><option>marital_status</option>
-          </select>
+          <label>Citizen ID</label>
+          <input id="cam-cid" type="number" value="7" style="max-width:120px">
         </div>
-        <div class="form-group"><label>New Value</label><input id="upd-value" placeholder="New value"></div>
+        <video id="cam-video" autoplay playsinline width="320" height="240"></video>
+        <canvas id="cam-canvas" width="320" height="240" style="display:none"></canvas>
+        <div class="btn-row">
+          <button onclick="startCamera()" class="btn btn-secondary"><i class="fas fa-video"></i> Start Camera</button>
+          <button onclick="capturePhoto()" class="btn btn-primary"><i class="fas fa-camera"></i> Capture &amp;
+            Process</button>
+        </div>
+        <div id="cam-result"></div>
       </div>
-      <div class="form-group">
-        <label>Reason</label>
-        <input id="upd-reason" placeholder="Reason for update request" style="width:100%">
-      </div>
-      <div class="btn-row">
-        <button onclick="submitUpdateRequest()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Request</button>
-        <button onclick="loadUpdateRequests()" class="btn btn-secondary"><i class="fas fa-list"></i> View Pending</button>
-      </div>
-      <div id="update-table"></div>
     </div>
-  </div>
 
-  <!-- CAMERA -->
-  <div id="tab-camera" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-camera"></i> Camera Capture + Background Removal</h3>
-      <div class="form-group">
-        <label>Citizen ID</label>
-        <input id="cam-cid" type="number" value="7" style="max-width:120px">
-      </div>
-      <video id="cam-video" autoplay playsinline width="320" height="240"></video>
-      <canvas id="cam-canvas" width="320" height="240" style="display:none"></canvas>
-      <div class="btn-row">
-        <button onclick="startCamera()" class="btn btn-secondary"><i class="fas fa-video"></i> Start Camera</button>
-        <button onclick="capturePhoto()" class="btn btn-primary"><i class="fas fa-camera"></i> Capture &amp; Process</button>
-      </div>
-      <div id="cam-result"></div>
-    </div>
-  </div>
-
-  <!-- BIOMETRIC — drop-in replacement for the tab-biometric card content -->
-  <!-- Find the existing biometric card in index.html and replace everything
+    <!-- BIOMETRIC — drop-in replacement for the tab-biometric card content -->
+    <!-- Find the existing biometric card in index.html and replace everything
        between <div id="tab-biometric" ...> and its closing </div></div>
        with this block -->
 
-  <div id="tab-biometric" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-fingerprint"></i> Biometric Verification</h3>
+    <div id="tab-biometric" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-fingerprint"></i> Biometric Verification</h3>
 
-      <!-- Citizen ID (shared by all operations) -->
-      <div class="form-group">
-        <label>Citizen ID</label>
-        <input id="bio-cid" type="number" value="7" style="max-width:120px">
-      </div>
+        <!-- Citizen ID (shared by all operations) -->
+        <div class="form-group">
+          <label>Citizen ID</label>
+          <input id="bio-cid" type="number" value="7" style="max-width:120px">
+        </div>
 
-      <!-- ── Shared camera ──────────────────────────────────────────── -->
-      <!-- One camera feed is reused for both face and fingerprint.      -->
-      <!-- The label above the video updates to tell the officer what    -->
-      <!-- to point the camera at.                                       -->
-      <div class="form-group" style="margin-top:8px">
-        <label id="bio-cam-label" style="font-weight:600">Camera</label>
-        <video id="bio-video" autoplay playsinline width="320" height="240"
-               style="display:none;border-radius:6px;margin:6px 0;border:1px solid var(--border)">
-        </video>
+        <!-- ── Shared camera ──────────────────────────────────────────── -->
+        <!-- One camera feed is reused for both face and fingerprint.      -->
+        <!-- The label above the video updates to tell the officer what    -->
+        <!-- to point the camera at.                                       -->
+        <div class="form-group" style="margin-top:8px">
+          <label id="bio-cam-label" style="font-weight:600">Camera</label>
+          <video id="bio-video" autoplay playsinline width="320" height="240"
+            style="display:none;border-radius:6px;margin:6px 0;border:1px solid var(--border)">
+          </video>
+          <div class="btn-row">
+            <button id="bio-cam-btn" class="btn btn-secondary btn-sm" onclick="startBioCamera()">
+              <i class="fas fa-video"></i> Start Camera
+            </button>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border);margin:18px 0">
+
+        <!-- ── FACE section ───────────────────────────────────────────── -->
+        <h4
+          style="margin:0 0 10px;color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:.05em">
+          <i class="fas fa-user-circle"></i> Face
+        </h4>
         <div class="btn-row">
-          <button id="bio-cam-btn" class="btn btn-secondary btn-sm" onclick="startBioCamera()">
-            <i class="fas fa-video"></i> Start Camera
+          <button id="bio-enroll-btn" class="btn btn-secondary btn-sm" onclick="enrollBiometric()" disabled>
+            <i class="fas fa-plus-circle"></i> Enroll Face
+          </button>
+          <button id="bio-verify-face-btn" class="btn btn-primary btn-sm" onclick="verifyFace()" disabled>
+            <i class="fas fa-user-check"></i> Verify Face
           </button>
         </div>
-      </div>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
+          Start camera, position your face in frame, then click Enroll Face or Verify Face.
+        </p>
 
-      <hr style="border-color:var(--border);margin:18px 0">
+        <hr style="border-color:var(--border);margin:18px 0">
 
-      <!-- ── FACE section ───────────────────────────────────────────── -->
-      <h4 style="margin:0 0 10px;color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:.05em">
-        <i class="fas fa-user-circle"></i> Face
-      </h4>
-      <div class="btn-row">
-        <button id="bio-enroll-btn" class="btn btn-secondary btn-sm" onclick="enrollBiometric()" disabled>
-          <i class="fas fa-plus-circle"></i> Enroll Face
-        </button>
-        <button id="bio-verify-face-btn" class="btn btn-primary btn-sm" onclick="verifyFace()" disabled>
-          <i class="fas fa-user-check"></i> Verify Face
-        </button>
-      </div>
-      <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
-        Start camera, position your face in frame, then click Enroll Face or Verify Face.
-      </p>
-
-      <hr style="border-color:var(--border);margin:18px 0">
-
-      <!-- ── FINGERPRINT section ────────────────────────────────────── -->
-      <h4 style="margin:0 0 10px;color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:.05em">
-        <i class="fas fa-fingerprint"></i> Fingerprint
-      </h4>
-      <div class="btn-row">
-        <button id="bio-enroll-fp-btn" class="btn btn-secondary btn-sm" onclick="enrollFingerprint()" disabled>
-          <i class="fas fa-plus-circle"></i> Enroll Fingerprint
-        </button>
-        <button id="bio-verify-fp-btn" class="btn btn-primary btn-sm" onclick="verifyFingerprint()" disabled>
-          <i class="fas fa-fingerprint"></i> Verify Fingerprint
-        </button>
-      </div>
-      <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
-        Start camera, hold finger flat and steady under good light, then click Enroll or Verify.
-      </p>
-
-      <!-- Result area (shared) -->
-      <div id="bio-result" style="margin-top:14px"></div>
-    </div>
-  </div>
-
-  <!-- COMPLAINTS -->
-  <div id="tab-complaints" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-exclamation-circle"></i> Complaints</h3>
-      <div class="form-group"><label>Citizen ID</label><input id="comp-cid" type="number" value="7" style="max-width:120px"></div>
-      <div class="form-group"><label>Subject</label><input id="comp-subject" placeholder="Brief subject"></div>
-      <div class="form-group"><label>Description</label><textarea id="comp-desc" rows="3" placeholder="Full description..."></textarea></div>
-      <div class="btn-row">
-        <button onclick="submitComplaint()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Complaint</button>
-        <button onclick="loadComplaints()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
-      </div>
-      <div id="complaints-table"></div>
-    </div>
-  </div>
-
-  <!-- NOTIFICATIONS -->
-  <div id="tab-notif" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-bell"></i> Notifications</h3>
-      <div class="toolbar">
-        <input id="notif-cid" type="number" placeholder="Citizen ID (optional)">
-        <label class="checkbox-label"><input id="notif-unread" type="checkbox"> Unread only</label>
-        <button onclick="loadNotifications()" class="btn btn-primary"><i class="fas fa-sync"></i> Load</button>
-        <button onclick="loadUnreadCount()" class="btn btn-secondary"><i class="fas fa-hashtag"></i> Unread Count</button>
-      </div>
-      <div id="notif-count" style="margin-bottom:10px"></div>
-      <div id="notif-list"></div>
-    </div>
-  </div>
-
-  <!-- PERMISSIONS -->
-  <div id="tab-perms" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-key"></i> Permission Management (Admin Only)</h3>
-      <div class="form-row">
-        <div class="form-group"><label>Officer ID</label><input id="perm-oid" type="number" value="2"></div>
-        <div class="form-group">
-          <label>Permission</label>
-          <select id="perm-name">
-            <option>manage_citizens</option><option>manage_cnic</option>
-            <option>manage_passport</option><option>manage_license</option>
-            <option>manage_registrations</option><option>manage_security</option>
-            <option>manage_complaints</option><option>view_reports</option>
-            <option>manage_officers</option><option>manage_payments</option>
-            <option>generate_pdf</option><option>manage_biometric</option>
-          </select>
+        <!-- ── FINGERPRINT section ────────────────────────────────────── -->
+        <h4
+          style="margin:0 0 10px;color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:.05em">
+          <i class="fas fa-fingerprint"></i> Fingerprint
+        </h4>
+        <div class="btn-row">
+          <button id="bio-enroll-fp-btn" class="btn btn-secondary btn-sm" onclick="enrollFingerprint()" disabled>
+            <i class="fas fa-plus-circle"></i> Enroll Fingerprint
+          </button>
+          <button id="bio-verify-fp-btn" class="btn btn-primary btn-sm" onclick="verifyFingerprint()" disabled>
+            <i class="fas fa-fingerprint"></i> Verify Fingerprint
+          </button>
         </div>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
+          Start camera, hold finger flat and steady under good light, then click Enroll or Verify.
+        </p>
+
+        <!-- Result area (shared) -->
+        <div id="bio-result" style="margin-top:14px"></div>
       </div>
-      <div class="btn-row">
-        <button onclick="grantPermission()" class="btn btn-success"><i class="fas fa-plus"></i> Grant</button>
-        <button onclick="revokePermission()" class="btn btn-danger"><i class="fas fa-minus"></i> Revoke</button>
-        <button onclick="loadPermissions()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
-        <button onclick="myPermissions()" class="btn btn-secondary"><i class="fas fa-user-tag"></i> My Permissions</button>
-      </div>
-      <div id="perms-table"></div>
     </div>
+
+    <!-- COMPLAINTS -->
+    <div id="tab-complaints" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-exclamation-circle"></i> Complaints</h3>
+        <div class="form-group"><label>Citizen ID</label><input id="comp-cid" type="number" value="7"
+            style="max-width:120px"></div>
+        <div class="form-group"><label>Subject</label><input id="comp-subject" placeholder="Brief subject"></div>
+        <div class="form-group"><label>Description</label><textarea id="comp-desc" rows="3"
+            placeholder="Full description..."></textarea></div>
+        <div class="btn-row">
+          <button onclick="submitComplaint()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit
+            Complaint</button>
+          <button onclick="loadComplaints()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
+        </div>
+        <div id="complaints-table"></div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div id="tab-notif" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-bell"></i> Notifications</h3>
+        <div class="toolbar">
+          <input id="notif-cid" type="number" placeholder="Citizen ID (optional)">
+          <label class="checkbox-label"><input id="notif-unread" type="checkbox"> Unread only</label>
+          <button onclick="loadNotifications()" class="btn btn-primary"><i class="fas fa-sync"></i> Load</button>
+          <button onclick="loadUnreadCount()" class="btn btn-secondary"><i class="fas fa-hashtag"></i> Unread
+            Count</button>
+        </div>
+        <div id="notif-count" style="margin-bottom:10px"></div>
+        <div id="notif-list"></div>
+      </div>
+    </div>
+
+    <!-- PERMISSIONS -->
+    <div id="tab-perms" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-key"></i> Permission Management (Admin Only)</h3>
+        <div class="form-row">
+          <div class="form-group"><label>Officer ID</label><input id="perm-oid" type="number" value="2"></div>
+          <div class="form-group">
+            <label>Permission</label>
+            <select id="perm-name">
+              <option>manage_citizens</option>
+              <option>manage_cnic</option>
+              <option>manage_passport</option>
+              <option>manage_license</option>
+              <option>manage_registrations</option>
+              <option>manage_security</option>
+              <option>manage_complaints</option>
+              <option>view_reports</option>
+              <option>manage_officers</option>
+              <option>manage_payments</option>
+              <option>generate_pdf</option>
+              <option>manage_biometric</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button onclick="grantPermission()" class="btn btn-success"><i class="fas fa-plus"></i> Grant</button>
+          <button onclick="revokePermission()" class="btn btn-danger"><i class="fas fa-minus"></i> Revoke</button>
+          <button onclick="loadPermissions()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
+          <button onclick="myPermissions()" class="btn btn-secondary"><i class="fas fa-user-tag"></i> My
+            Permissions</button>
+        </div>
+        <div id="perms-table"></div>
+      </div>
+    </div>
+
+    <!-- AUDIT LOG -->
+    <div id="tab-audit" class="tab-content">
+      <div class="card">
+        <h3><i class="fas fa-list-check"></i> Audit Log</h3>
+        <div class="toolbar">
+          <input id="audit-officer" type="number" placeholder="Officer ID">
+          <input id="audit-table-input" placeholder="Table name (e.g. Citizen)">
+          <select id="audit-action"
+            style="padding:8px 11px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text)">
+            <option value="">All actions</option>
+            <option>INSERT</option>
+            <option>UPDATE</option>
+            <option>DELETE</option>
+            <option>VIEW</option>
+            <option>LOGIN</option>
+            <option>LOGOUT</option>
+          </select>
+          <button onclick="loadAuditLog()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+        </div>
+        <div id="audit-table-div"></div>
+      </div>
+    </div>
+
+    <div id="toast-container"></div>
   </div>
 
-  <!-- AUDIT LOG -->
-  <div id="tab-audit" class="tab-content">
-    <div class="card">
-      <h3><i class="fas fa-list-check"></i> Audit Log</h3>
-      <div class="toolbar">
-        <input id="audit-officer" type="number" placeholder="Officer ID">
-        <input id="audit-table-input" placeholder="Table name (e.g. Citizen)">
-        <select id="audit-action" style="padding:8px 11px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text)">
-          <option value="">All actions</option>
-          <option>INSERT</option><option>UPDATE</option>
-          <option>DELETE</option><option>VIEW</option>
-          <option>LOGIN</option><option>LOGOUT</option>
-        </select>
-        <button onclick="loadAuditLog()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-      </div>
-      <div id="audit-table-div"></div>
-    </div>
-  </div>
-
-  <div id="toast-container"></div>
-</div>
-
-<a href="chatbot.html" class="fab-chatbot" title="Open AI Assistant">
-  <i class="fas fa-robot"></i>
-  <span class="fab-text">AI Assistant</span>
-</a>
+  <a href="chatbot.html" class="fab-chatbot" title="Open AI Assistant">
+    <i class="fas fa-robot"></i>
+    <span class="fab-text">AI Assistant</span>
+  </a>
 
 
 
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
+
 </html>

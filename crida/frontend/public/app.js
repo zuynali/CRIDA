@@ -34,6 +34,27 @@ function toast(msg, type = "ok") {
   setTimeout(() => el.remove(), 4000);
 }
 
+// ── Theme Toggling ────────────────────────────────────────────────────────
+const savedTheme = localStorage.getItem("crida_theme") || "dark";
+if(savedTheme === "light") document.documentElement.setAttribute("data-theme", "light");
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
+  const target = current === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", target);
+  localStorage.setItem("crida_theme", target);
+  
+  const icon = document.querySelector("#theme-toggle i");
+  if(icon) {
+    icon.className = target === "light" ? "fas fa-moon" : "fas fa-sun";
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const icon = document.querySelector("#theme-toggle i");
+  if(icon) icon.className = savedTheme === "light" ? "fas fa-moon" : "fas fa-sun";
+});
+
 // ── ACID log ──────────────────────────────────────────────────────────────
 function acidLog(msg) {
   const log = document.getElementById("acid-log");
@@ -543,7 +564,7 @@ async function captureFingerFrame() {
   const cropY = Math.floor((vh - cropH) / 2);
 
   const canvas = document.createElement("canvas");
-  canvas.width  = cropW;
+  canvas.width = cropW;
   canvas.height = cropH;
   canvas.getContext("2d").drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
@@ -551,8 +572,8 @@ async function captureFingerFrame() {
   if (base64.length < 2000) return null;
 
   const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.95));
-  const buf  = await blob.arrayBuffer();
-  const raw  = await crypto.subtle.digest("SHA-256", buf);
+  const buf = await blob.arrayBuffer();
+  const raw = await crypto.subtle.digest("SHA-256", buf);
   const hash = Array.from(new Uint8Array(raw))
     .map(b => b.toString(16).padStart(2, "0")).join("");
 
@@ -595,40 +616,40 @@ function drawFingerprintOverlay() {
 
   const video = document.getElementById("bio-video");
   const c = _fpOverlayCanvas;
-  c.width  = video.offsetWidth  || 320;
+  c.width = video.offsetWidth || 320;
   c.height = video.offsetHeight || 240;
 
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, c.width, c.height);
 
   // Darken everything outside the crop zone
-  const bx = c.width  * 0.30;
+  const bx = c.width * 0.30;
   const by = c.height * 0.20;
-  const bw = c.width  * 0.40;
+  const bw = c.width * 0.40;
   const bh = c.height * 0.60;
 
   ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.fillRect(0,  0,  c.width, c.height);   // full dark
+  ctx.fillRect(0, 0, c.width, c.height);   // full dark
   ctx.clearRect(bx, by, bw, bh);             // cut out the finger zone
 
   // Bright border around the finger zone
   ctx.strokeStyle = "#00e5ff";
-  ctx.lineWidth   = 2;
+  ctx.lineWidth = 2;
   ctx.strokeRect(bx, by, bw, bh);
 
   // Corner tick marks
   const t = 14;
   ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth   = 3;
-  [[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].forEach(([x,y],i) => {
+  ctx.lineWidth = 3;
+  [[bx, by], [bx + bw, by], [bx, by + bh], [bx + bw, by + bh]].forEach(([x, y], i) => {
     const sx = i % 2 === 0 ? 1 : -1;
-    const sy = i < 2       ? 1 : -1;
-    ctx.beginPath(); ctx.moveTo(x, y+sy*t); ctx.lineTo(x, y); ctx.lineTo(x+sx*t, y); ctx.stroke();
+    const sy = i < 2 ? 1 : -1;
+    ctx.beginPath(); ctx.moveTo(x, y + sy * t); ctx.lineTo(x, y); ctx.lineTo(x + sx * t, y); ctx.stroke();
   });
 
   // Label
   ctx.fillStyle = "#00e5ff";
-  ctx.font      = "bold 11px monospace";
+  ctx.font = "bold 11px monospace";
   ctx.fillText("PLACE FINGER HERE", bx + 8, by - 6);
 
   requestAnimationFrame(drawFingerprintOverlay);
@@ -709,7 +730,7 @@ async function enrollBiometric() {
 async function enrollFingerprint() {
   const cid = parseInt(document.getElementById("bio-cid").value);
   const div = document.getElementById("bio-result");
-  if (!cid)       { toast("Enter a Citizen ID", "err"); return; }
+  if (!cid) { toast("Enter a Citizen ID", "err"); return; }
   if (!bioStream) { toast("Start the camera and point it at the finger", "warn"); return; }
 
   startFingerprintOverlay();
@@ -754,13 +775,13 @@ async function enrollFingerprint() {
   // Store SHA-256 of image in Biometric_Data.fingerprint_hash
   try {
     const bioResp = await req("POST", "/biometric/enroll", {
-      citizen_id:       cid,
+      citizen_id: cid,
       fingerprint_hash: frame.hash,
       facial_scan_hash: ""
     });
     if (bioResp.ok) {
       toast("Fingerprint enrolled ✓", "ok");
-      acidLog(`BIOMETRIC fingerprint enrolled for citizen ${cid} | hash: ${frame.hash.substring(0,16)}…`);
+      acidLog(`BIOMETRIC fingerprint enrolled for citizen ${cid} | hash: ${frame.hash.substring(0, 16)}…`);
       div.innerHTML = `<div class="msg-box ok" style="display:block;margin-top:10px">
         ✅ ${bioResp.data.message}<br>
         <small>
@@ -781,7 +802,7 @@ async function enrollFingerprint() {
 // against stored fingerprint photo (same algorithm as face verify)
 async function verifyFingerprint() {
   const cid = parseInt(document.getElementById("bio-cid").value);
-  if (!cid)       { toast("Enter a Citizen ID", "err"); return; }
+  if (!cid) { toast("Enter a Citizen ID", "err"); return; }
   if (!bioStream) { toast("Start the camera and point it at the finger", "warn"); return; }
 
   const video = document.getElementById("bio-video");
@@ -818,9 +839,9 @@ async function verifyFingerprint() {
       return;
     }
 
-    const v    = r.data.verified;
+    const v = r.data.verified;
     const conf = r.data.confidence != null ? `${r.data.confidence}%` : "—";
-    const note = r.data.note   ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>` : "";
+    const note = r.data.note ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>` : "";
     const reason = r.data.reason ? `<br><small>${r.data.reason}</small>` : "";
 
     div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
@@ -844,7 +865,7 @@ async function verifyFingerprint() {
 
 async function verifyFace() {
   const cid = parseInt(document.getElementById("bio-cid").value);
-  if (!cid)       { toast("Enter a Citizen ID", "err"); return; }
+  if (!cid) { toast("Enter a Citizen ID", "err"); return; }
   if (!bioStream) { toast("Start the camera first", "err"); return; }
 
   const video = document.getElementById("bio-video");
@@ -880,9 +901,9 @@ async function verifyFace() {
       return;
     }
 
-    const v    = r.data.verified;
+    const v = r.data.verified;
     const conf = r.data.confidence != null ? `${r.data.confidence}%` : "—";
-    const note = r.data.note   ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>` : "";
+    const note = r.data.note ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>` : "";
     const reason = r.data.reason ? `<br><small>${r.data.reason}</small>` : "";
 
     div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
@@ -910,7 +931,7 @@ async function bioDebug(citizenId) {
   const div = document.getElementById("bio-result");
   div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px;font-family:monospace;font-size:0.78rem">
     <strong>Debug — Citizen ${citizenId}</strong><br>
-    Photo in DB:   <code>${r.data.photo?.db_path  || "none"}</code><br>
+    Photo in DB:   <code>${r.data.photo?.db_path || "none"}</code><br>
     Resolved path: <code>${r.data.photo?.resolved || "—"}</code><br>
     File exists:   <strong>${r.data.photo?.exists ?? "—"}</strong>
     &nbsp; Size: ${r.data.photo?.size_bytes ? (r.data.photo.size_bytes / 1024).toFixed(1) + " KB" : "—"}<br>
