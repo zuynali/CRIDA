@@ -1,0 +1,347 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  .crida-wrap {
+    font-family: 'Sora', sans-serif;
+    background: #0d0f14;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .chat-shell {
+    width: 420px;
+    height: 680px;
+    background: #13151c;
+    border-radius: 20px;
+    border: 1px solid #232635;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  }
+
+  /* Header */
+  .chat-header {
+    background: linear-gradient(135deg, #1a1d2e 0%, #111320 100%);
+    border-bottom: 1px solid #232635;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .header-avatar {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .header-text h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8eaf2;
+    letter-spacing: 0.02em;
+  }
+  .header-text p {
+    font-size: 11px;
+    color: #5a6080;
+    margin-top: 2px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    background: #22c55e;
+    border-radius: 50%;
+    margin-left: auto;
+    box-shadow: 0 0 6px #22c55e88;
+  }
+
+  /* Messages */
+  .chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #232635 transparent;
+  }
+  .chat-body::-webkit-scrollbar { width: 4px; }
+  .chat-body::-webkit-scrollbar-thumb { background: #232635; border-radius: 4px; }
+
+  .msg-row { display: flex; align-items: flex-end; gap: 8px; }
+  .msg-row.user { flex-direction: row-reverse; }
+
+  .bot-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .bubble {
+    max-width: 72%;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    border-radius: 14px;
+  }
+  .msg-row.bot .bubble {
+    background: #1e2130;
+    color: #c8cfe8;
+    border-bottom-left-radius: 4px;
+    border: 1px solid #2a2d40;
+  }
+  .msg-row.user .bubble {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg-time {
+    font-size: 10px;
+    color: #3a3f5c;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: right;
+  }
+  .msg-row.user .msg-time { text-align: left; }
+
+  /* Typing indicator */
+  .typing-bubble {
+    background: #1e2130;
+    border: 1px solid #2a2d40;
+    border-radius: 14px;
+    border-bottom-left-radius: 4px;
+    padding: 12px 16px;
+    display: flex; gap: 4px; align-items: center;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    background: #4a5280;
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-5px); background: #3b82f6; }
+  }
+
+  /* Suggested questions */
+  .suggestions {
+    padding: 0 16px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .suggestions-label {
+    font-size: 10px;
+    color: #3a3f5c;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 2px;
+    padding: 0 2px;
+  }
+  .suggestion-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    background: #1a1d2e;
+    border: 1px solid #2a2d40;
+    color: #8892b8;
+    font-size: 11.5px;
+    padding: 6px 11px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: 'Sora', sans-serif;
+  }
+  .chip:hover {
+    background: #252840;
+    border-color: #3b82f6;
+    color: #93b4f8;
+  }
+
+  /* Input bar */
+  .chat-footer {
+    background: #0f1118;
+    border-top: 1px solid #1e2130;
+    padding: 12px 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .chat-input-field {
+    flex: 1;
+    background: #1a1d2e;
+    border: 1px solid #2a2d40;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    color: #c8cfe8;
+    font-family: 'Sora', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .chat-input-field::placeholder { color: #3a3f5c; }
+  .chat-input-field:focus { border-color: #3b82f6; }
+  .send-btn {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border: none;
+    border-radius: 11px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.15s, opacity 0.15s;
+  }
+  .send-btn:hover { transform: scale(1.06); }
+  .send-btn:active { transform: scale(0.95); }
+  .send-btn svg { width: 16px; height: 16px; fill: white; }
+
+  /* Welcome msg */
+  .welcome-chip {
+    display: inline-block;
+    background: #1a1d2e;
+    border: 1px solid #2a2d40;
+    color: #5a6080;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin: 4px auto 8px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.05em;
+    text-align: center;
+    width: fit-content;
+    align-self: center;
+  }
+</style>
+
+<div class="crida-wrap">
+  <div class="chat-shell">
+
+    <div class="chat-header">
+      <div class="header-avatar">🏛️</div>
+      <div class="header-text">
+        <h2>CRIDA Assistant</h2>
+        <p>Civil Registration and Database Authority</p>
+      </div>
+      <div class="status-dot"></div>
+    </div>
+
+    <div class="chat-body" id="chatBody">
+      <div class="welcome-chip">Today · Session started</div>
+      <div class="msg-row bot">
+        <div class="bot-icon">🤖</div>
+        <div>
+          <div class="bubble">Hello! I'm the CRIDA virtual assistant. I can help you with queries about registrations, eligibility, and more.<br><br>How can I assist you today?</div>
+          <div class="msg-time">09:00 AM</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="suggestions">
+      <div class="suggestions-label">Suggested questions</div>
+      <div class="suggestion-chips" id="chips">
+        <span class="chip" onclick="quickSend(this)">What Facilities Are Avaialble?</span>
+        <span class="chip" onclick="quickSend(this)">How do I register?</span>
+        <span class="chip" onclick="quickSend(this)">Check application status</span>
+        <span class="chip" onclick="quickSend(this)">Eligibility criteria</span>
+        <span class="chip" onclick="quickSend(this)">Required documents</span>
+        <span class="chip" onclick="quickSend(this)">Contact CRIDA office</span>
+      </div>
+    </div>
+
+    <div class="chat-footer">
+      <input class="chat-input-field" id="msgInput" placeholder="Type your query here..." onkeydown="if(event.key==='Enter') sendMsg()" />
+      <button class="send-btn" onclick="sendMsg()">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function getTime() {
+    const now = new Date();
+    let h = now.getHours(), m = now.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${String(m).padStart(2,'0')} ${ampm}`;
+  }
+
+  function appendMsg(text, type) {
+    const body = document.getElementById('chatBody');
+    const row = document.createElement('div');
+    row.className = 'msg-row ' + type;
+
+    let inner = '';
+    if (type === 'bot') {
+      inner = `<div class="bot-icon">🤖</div><div><div class="bubble">${text}</div><div class="msg-time">${getTime()}</div></div>`;
+    } else {
+      inner = `<div><div class="bubble">${text}</div><div class="msg-time">${getTime()}</div></div>`;
+    }
+    row.innerHTML = inner;
+    body.appendChild(row);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function showTyping() {
+    const body = document.getElementById('chatBody');
+    const row = document.createElement('div');
+    row.className = 'msg-row bot'; row.id = 'typingRow';
+    row.innerHTML = `<div class="bot-icon">🤖</div><div class="typing-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+    body.appendChild(row);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('typingRow');
+    if (t) t.remove();
+  }
+
+  async function sendMsg() {
+    const input = document.getElementById('msgInput');
+    const msg = input.value.trim();
+    if (!msg) return;
+    appendMsg(msg, 'user');
+    input.value = '';
+    showTyping();
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/v1/chatbot/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+      });
+      const data = await res.json();
+      removeTyping();
+      appendMsg(data.reply, 'bot');
+    } catch(e) {
+      removeTyping();
+      appendMsg('Unable to reach the server. Please try again shortly.', 'bot');
+    }
+  }
+
+  function quickSend(el) {
+    const msg = el.textContent;
+    document.getElementById('msgInput').value = msg;
+    sendMsg();
+  }
+</script>

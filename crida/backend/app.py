@@ -40,6 +40,7 @@ from routes.permission_routes  import permission_bp
 from routes.notification_routes import notification_bp
 from routes.payment_routes     import payment_bp
 from routes.audit_routes       import audit_bp
+from routes.chatbot            import chatbot_bp
 
 blueprints = [
     (auth_bp,         "/api/v1/auth"),
@@ -59,6 +60,7 @@ blueprints = [
     (notification_bp, "/api/v1/notifications"),
     (payment_bp,      "/api/v1/payments"),
     (audit_bp,        "/api/v1/audit"),
+    (chatbot_bp,      "/api/v1/chatbot"),
 ]
 
 for bp, prefix in blueprints:
