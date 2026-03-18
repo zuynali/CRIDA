@@ -22,7 +22,9 @@ Then seed the data:
 ```bash
 sudo mysql -u root -p CRID < seed_2.sql
 ```
-
+```bash
+mysql -u crida_user -pcrida1234 CRID < family_seed.sql
+```
 ### Step 2 — Backend
 
 ```bash
