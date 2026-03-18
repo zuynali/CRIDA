@@ -291,7 +291,7 @@ def verify_face():
             }), 200
 
         distance   = face_recognition.face_distance([known_encs[0]], unknown_encs[0])[0]
-        verified   = bool(distance < 0.55)
+        verified   = bool(distance < 0.10)   # confidence = (1-distance)*100 must be >= 90%
         confidence = round((1.0 - float(distance)) * 100, 1)
 
         logger.info(f"face_recognition: distance={distance:.3f}, verified={verified}")
@@ -303,7 +303,7 @@ def verify_face():
         }), 200
 
     except Exception as _e:
-        logger.warning("face_recognition not installed — falling back to OpenCV ORB")
+        logger.warning(f"face_recognition unavailable ({type(_e).__name__}: {_e}) — falling back to OpenCV ORB")
 
     # ── 3b. Fallback: OpenCV ORB feature matching ─────────────────────────
     try:
@@ -348,7 +348,7 @@ def verify_face():
 
         good     = [m for m in matches if m.distance < 50]
         score    = len(good) / max(len(matches), 1)
-        verified = score > 0.15
+        verified = score > 0.45   # ~90% confidence threshold
 
         confidence = round(min(score * 200, 100), 1)
         logger.info(f"OpenCV ORB: good={len(good)}, total={len(matches)}, score={score:.3f}")
@@ -361,7 +361,7 @@ def verify_face():
         }), 200
 
     except Exception as _e:
-        return jsonify({"error": f"OpenCV failed: {_e}"}), 500
+        pass
 
     # ── 3c. Neither library available ────────────────────────────────────
     return jsonify({
@@ -371,6 +371,201 @@ def verify_face():
             "Run: pip install face_recognition  OR  pip install opencv-python"
         )
     }), 501
+
+
+# ─────────────────────────────────────────────────────────────────────────
+#  UPLOAD FINGERPRINT PHOTO
+#
+#  Same logic as upload_photo but saves with a distinct filename so face
+#  and fingerprint photos don't overwrite each other.
+#  Stored in Document table as document_type = 'supporting_doc' with a
+#  filename that contains '_fingerprint_' so verify-fingerprint-image
+#  can find it.  (The schema ENUM only allows photo/signature/supporting_doc
+#  so we use supporting_doc and distinguish by filename convention.)
+# ─────────────────────────────────────────────────────────────────────────
+
+@biometric_bp.route("/upload-fingerprint", methods=["POST"])
+@token_required
+@permission_required("manage_biometric")
+def upload_fingerprint():
+    """
+    Body: { citizen_id: int, image: "data:image/jpeg;base64,…" }
+    Saves the fingerprint JPEG and upserts a Document row (supporting_doc).
+    """
+    import base64
+
+    data = request.json or {}
+    ok, err = require_fields(data, "citizen_id", "image")
+    if not ok:
+        return jsonify({"error": err}), 400
+
+    cid = data["citizen_id"]
+
+    citizen = execute_query(
+        "SELECT citizen_id FROM Citizen WHERE citizen_id = %s",
+        (cid,), fetch="one")
+    if not citizen:
+        return jsonify({"error": "Citizen not found"}), 404
+
+    raw = data["image"]
+    if "," in raw:
+        raw = raw.split(",", 1)[1]
+    try:
+        img_bytes = base64.b64decode(raw)
+    except Exception as e:
+        return jsonify({"error": f"Could not decode image: {e}"}), 400
+
+    if len(img_bytes) < 1000:
+        return jsonify({"error": "Image too small — ensure camera is live"}), 400
+
+    os.makedirs(_UPLOADS_DIR, exist_ok=True)
+    filename  = f"citizen_{cid}_fingerprint.jpg"
+    full_path = os.path.join(_UPLOADS_DIR, filename)
+    rel_path  = f"uploads/{filename}"
+
+    with open(full_path, "wb") as f:
+        f.write(img_bytes)
+
+    logger.info(f"upload_fingerprint: saved {full_path} ({len(img_bytes)} bytes)")
+
+    # Upsert Document row — use supporting_doc (schema constraint) + filename convention
+    existing_doc = execute_query(
+        "SELECT document_id FROM Document WHERE citizen_id = %s "
+        "AND document_type = 'supporting_doc' AND file_path LIKE %s",
+        (cid, "%_fingerprint_%"), fetch="one")
+
+    if existing_doc:
+        execute_query(
+            "UPDATE Document SET file_path = %s, uploaded_at = CURRENT_TIMESTAMP, "
+            "verification_status = 'pending' WHERE document_id = %s",
+            (rel_path, existing_doc["document_id"]))
+    else:
+        execute_query(
+            "INSERT INTO Document (citizen_id, document_type, file_path, verification_status) "
+            "VALUES (%s, 'supporting_doc', %s, 'pending')",
+            (cid, rel_path))
+
+    return jsonify({"message": "Fingerprint photo saved", "file_path": rel_path}), 200
+
+
+# ─────────────────────────────────────────────────────────────────────────
+#  VERIFY FINGERPRINT IMAGE  (camera-based OpenCV matching)
+#
+#  Mirrors verify_face exactly — uses OpenCV ORB feature matching to
+#  compare a live camera frame against the stored fingerprint photo.
+# ─────────────────────────────────────────────────────────────────────────
+
+@biometric_bp.route("/verify-fingerprint-image", methods=["POST"])
+@token_required
+def verify_fingerprint_image():
+    """
+    Compare a submitted base64 JPEG of a finger against the stored
+    fingerprint photo using OpenCV ORB feature matching.
+    """
+    data = request.json or {}
+    ok, err = require_fields(data, "citizen_id", "image")
+    if not ok:
+        return jsonify({"error": err}), 400
+
+    # ── 1. Find stored fingerprint photo ─────────────────────────────────
+    doc = execute_query(
+        "SELECT file_path FROM Document "
+        "WHERE citizen_id = %s AND document_type = 'supporting_doc' "
+        "AND file_path LIKE '%_fingerprint_%' "
+        "ORDER BY document_id DESC LIMIT 1",
+        (data["citizen_id"],), fetch="one")
+
+    if not doc:
+        return jsonify({
+            "error": "No fingerprint photo on file for this citizen. "
+                     "Use the Enroll Fingerprint button (with camera on) to upload one first."
+        }), 404
+
+    stored_path = _resolve_path(doc["file_path"])
+    logger.info(f"verify_fingerprint_image: stored_path={stored_path}, exists={os.path.exists(stored_path)}")
+
+    if not os.path.exists(stored_path):
+        return jsonify({
+            "error": f"Fingerprint photo not found on disk: {doc['file_path']}. "
+                     "Re-enroll via the Enroll Fingerprint button."
+        }), 404
+
+    # ── 2. Decode submitted image ─────────────────────────────────────────
+    import base64
+    import io
+    try:
+        raw = data["image"]
+        if "," in raw:
+            raw = raw.split(",", 1)[1]
+        img_bytes = base64.b64decode(raw)
+    except Exception as e:
+        return jsonify({"error": f"Could not decode image: {e}"}), 400
+
+    if len(img_bytes) < 1000:
+        return jsonify({"error": "Image too small — make sure camera is on"}), 400
+
+    # ── 3. OpenCV ORB feature matching ────────────────────────────────────
+    try:
+        import cv2
+        import numpy as np
+
+        known_bgr = cv2.imread(stored_path)
+        if known_bgr is None:
+            return jsonify({"error": "Could not read stored fingerprint photo"}), 500
+
+        nparr       = np.frombuffer(img_bytes, np.uint8)
+        unknown_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if unknown_bgr is None:
+            return jsonify({"error": "Could not decode submitted image"}), 400
+
+        known_gray   = cv2.cvtColor(known_bgr,   cv2.COLOR_BGR2GRAY)
+        unknown_gray = cv2.cvtColor(unknown_bgr, cv2.COLOR_BGR2GRAY)
+
+        # Resize to same height for fair comparison
+        h = 300
+        def resize_h(img, height):
+            ratio = height / img.shape[0]
+            return cv2.resize(img, (int(img.shape[1] * ratio), height))
+
+        known_gray   = resize_h(known_gray,   h)
+        unknown_gray = resize_h(unknown_gray, h)
+
+        # ORB with more features for fingerprint ridges (fingerprints have
+        # more fine detail than faces so we bump nfeatures up)
+        orb = cv2.ORB_create(nfeatures=1000)
+        kp1, des1 = orb.detectAndCompute(known_gray,   None)
+        kp2, des2 = orb.detectAndCompute(unknown_gray, None)
+
+        if des1 is None or des2 is None or len(des1) < 10 or len(des2) < 10:
+            return jsonify({
+                "verified": False,
+                "reason":   "Not enough ridge features detected. "
+                            "Ensure good lighting, hold finger flat and steady.",
+                "method":   "opencv_orb"
+            }), 200
+
+        bf      = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+        matches = bf.match(des1, des2)
+        matches = sorted(matches, key=lambda m: m.distance)
+
+        good     = [m for m in matches if m.distance < 50]
+        score    = len(good) / max(len(matches), 1)
+        # Fingerprint threshold slightly looser than face (0.15) because
+        # camera angle variation is higher for held fingers
+        verified = score > 0.45   # ~90% confidence threshold
+
+        confidence = round(min(score * 200, 100), 1)
+        logger.info(f"FP ORB: good={len(good)}, total={len(matches)}, score={score:.3f}")
+
+        return jsonify({
+            "verified":   verified,
+            "confidence": confidence,
+            "method":     "opencv_orb",
+            "note":       "For best results: same finger, same angle, good lighting"
+        }), 200
+
+    except Exception as _e:
+        return jsonify({"error": f"OpenCV failed: {_e}"}), 500
 
 
 # ─────────────────────────────────────────────────────────────────────────

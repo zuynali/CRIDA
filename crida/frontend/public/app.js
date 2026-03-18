@@ -3,8 +3,6 @@ let TOKEN = localStorage.getItem("crida_token") || null;
 let OFFICER = null;
 
 // ── Role-based tab visibility ─────────────────────────────────────────────
-// Called after every login. Reads data-roles on each nav link and hides
-// links (and their tab panels) that the current role is not allowed to see.
 function applyRoleVisibility(roleName) {
   document.querySelectorAll("[data-tab][data-roles]").forEach(link => {
     const allowed = link.dataset.roles;
@@ -80,10 +78,7 @@ async function doLogin() {
     document.getElementById("user-name").textContent = OFFICER.full_name;
     document.getElementById("user-role").textContent = OFFICER.role_name;
     document.getElementById("user-info").classList.remove("hidden");
-
-    // Apply role-based nav visibility BEFORE switching tabs
     applyRoleVisibility(OFFICER.role_name);
-
     toast("Welcome, " + OFFICER.full_name + "!", "ok");
     document.querySelector("[data-tab='dashboard']").click();
     loadDashboard();
@@ -96,15 +91,10 @@ async function doLogin() {
 function logout() {
   TOKEN = null; OFFICER = null;
   localStorage.removeItem("crida_token");
-
-  // Stop any active biometric camera on logout
   stopBioCamera();
-
-  // Restore all nav links visibility for the next login
   document.querySelectorAll("[data-tab][data-roles]").forEach(link => {
     link.style.display = "";
   });
-
   document.querySelector("[data-tab='login']").click();
   document.getElementById("user-info").classList.add("hidden");
   toast("Logged out", "warn");
@@ -185,33 +175,20 @@ async function generatePDF() {
 // ── Family Tree ───────────────────────────────────────────────────────────
 async function loadFamilyTree() {
   const cid = document.getElementById('family-cid').value;
-
-  if (!cid) {
-    alert("Enter Citizen ID");
-    return;
-  }
-
+  if (!cid) { alert("Enter Citizen ID"); return; }
   try {
     const r = await req("GET", `/family-tree/${cid}`);
-
-    if (!r.ok) {
-      throw new Error(r.data.error || "Failed");
-    }
-
+    if (!r.ok) throw new Error(r.data.error || "Failed");
     renderTree(r.data);
-
   } catch (e) {
     document.getElementById('family-result').innerHTML =
       `<div style="color:red;">Error: ${e.message}</div>`;
   }
 }
+
 function renderTree(data) {
   _treeData = data;
-
-  const parents = [];
-  const children = [];
-  const siblings = [];
-  const others = [];
+  const parents = [], children = [], siblings = [], others = [];
   const seen = new Set();
 
   [
@@ -220,44 +197,29 @@ function renderTree(data) {
   ].forEach(r => {
     if (seen.has(r.citizen_id)) return;
     seen.add(r.citizen_id);
-
     const rel = r._rel;
-
-    if (['Father', 'Mother', 'Grandfather', 'Grandmother'].includes(rel)) {
-      parents.push(r);
-    } else if (['Son', 'Daughter', 'Child', 'Grandson', 'Granddaughter'].includes(rel)) {
-      children.push(r);
-    } else if (['Brother', 'Sister', 'Sibling', 'Brother-in-law', 'Sister-in-law'].includes(rel)) {
-      siblings.push(r);
-    } else if (['Husband', 'Wife', 'Spouse'].includes(rel)) {
-      // Handled separately by the spouse section
-    } else {
-      others.push(r);
-    }
+    if (['Father', 'Mother', 'Grandfather', 'Grandmother'].includes(rel)) parents.push(r);
+    else if (['Son', 'Daughter', 'Child', 'Grandson', 'Granddaughter'].includes(rel)) children.push(r);
+    else if (['Brother', 'Sister', 'Sibling', 'Brother-in-law', 'Sister-in-law'].includes(rel)) siblings.push(r);
+    else if (['Husband', 'Wife', 'Spouse'].includes(rel)) { /* handled by spouse section */ }
+    else others.push(r);
   });
 
   const root = data.citizen;
   const spouse = data.spouse;
-
   let html = `<div class="ft-tree">`;
 
-  // PARENTS
   if (parents.length) {
     html += `
       <div class="ft-row-wrap">
         <div class="ft-section-label">Parents</div>
-        <div class="ft-row">
-          ${parents.map(p => personNode(p, p._rel, false, 52)).join('')}
-        </div>
+        <div class="ft-row">${parents.map(p => personNode(p, p._rel, false, 52)).join('')}</div>
       </div>
-      <div class="ft-vline" style="height:30px;background:#85B7EB"></div>
-    `;
+      <div class="ft-vline" style="height:30px;background:#85B7EB"></div>`;
   }
 
-  // MIDDLE
   html += `<div class="ft-row" style="align-items:center;gap:30px;flex-wrap:wrap">`;
 
-  // SIBLINGS
   if (siblings.length) {
     html += `
       <div style="display:flex;flex-direction:column;align-items:center">
@@ -266,111 +228,66 @@ function renderTree(data) {
           ${siblings.map(p => personNode(p, p._rel, false, 50)).join('')}
         </div>
       </div>
-      <div style="width:25px;height:2px;background:#ccc"></div>
-    `;
+      <div style="width:25px;height:2px;background:#ccc"></div>`;
   }
 
-  // ROOT
   html += `
     <div style="display:flex;flex-direction:column;align-items:center">
       <div class="ft-root-label">Root</div>
       ${personNode(root, null, true, 70)}
-    </div>
-  `;
+    </div>`;
 
-  // SPOUSE
   if (spouse) {
     const spouseRel = root.gender === 'Male' ? 'Wife' : 'Husband';
-
     html += `
       <div style="width:25px;height:2px;background:#EF9F27"></div>
       <div style="display:flex;flex-direction:column;align-items:center">
         <div class="ft-section-label">${spouseRel}</div>
-        ${personNode({
-      citizen_id: spouse.spouse_id,
-      full_name: spouse.spouse_name,
-      _rel: spouseRel
-    }, spouseRel, false, 50)}
-      </div>
-    `;
+        ${personNode({ citizen_id: spouse.spouse_id, full_name: spouse.spouse_name, _rel: spouseRel }, spouseRel, false, 50)}
+      </div>`;
   }
 
   html += `</div>`;
 
-  // CHILDREN
   if (children.length) {
     html += `
       <div class="ft-vline" style="height:30px;background:#97C459"></div>
       <div class="ft-row-wrap">
         <div class="ft-section-label">Children</div>
-        <div class="ft-row">
-          ${children.map(p => personNode(p, p._rel, false, 52)).join('')}
-        </div>
-      </div>
-    `;
+        <div class="ft-row">${children.map(p => personNode(p, p._rel, false, 52)).join('')}</div>
+      </div>`;
   }
 
-  // OTHERS
   if (others.length) {
     html += `
       <div style="margin-top:20px">
         <div class="ft-section-label">Others</div>
-        <div class="ft-row">
-          ${others.map(p => personNode(p, p._rel, false, 48)).join('')}
-        </div>
-      </div>
-    `;
+        <div class="ft-row">${others.map(p => personNode(p, p._rel, false, 48)).join('')}</div>
+      </div>`;
   }
 
   html += `</div>`;
-
   document.getElementById('family-result').innerHTML = html;
 }
+
 function personNode(person, relation, isRoot = false, size = 60) {
   const initials = person.full_name
     ? person.full_name.split(" ").map(n => n[0]).join("").toUpperCase()
     : "?";
-
   return `
-    <div style="
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      margin:6px;
-    ">
-      
-      <div style="
-        width:${size}px;
-        height:${size}px;
-        border-radius:50%;
-        background:${isRoot ? '#4CAF50' : '#2C3E50'};
-        color:white;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        font-weight:bold;
-        font-size:${size / 3}px;
-        border:${isRoot ? '3px solid #FFD700' : '2px solid #555'};
-      ">
+    <div style="display:flex;flex-direction:column;align-items:center;margin:6px;">
+      <div style="width:${size}px;height:${size}px;border-radius:50%;
+        background:${isRoot ? '#4CAF50' : '#2C3E50'};color:white;
+        display:flex;align-items:center;justify-content:center;
+        font-weight:bold;font-size:${size / 3}px;
+        border:${isRoot ? '3px solid #FFD700' : '2px solid #555'};">
         ${initials}
       </div>
-
-      <div style="margin-top:6px;font-size:12px;text-align:center">
-        ${person.full_name || "Unknown"}
-      </div>
-
-      ${relation ? `
-        <div style="
-          font-size:10px;
-          color:#aaa;
-          margin-top:2px;
-        ">
-          ${relation}
-        </div>
-      ` : ""}
-    </div>
-  `;
+      <div style="margin-top:6px;font-size:12px;text-align:center">${person.full_name || "Unknown"}</div>
+      ${relation ? `<div style="font-size:10px;color:#aaa;margin-top:2px;">${relation}</div>` : ""}
+    </div>`;
 }
+
 // ── Criminal Records ──────────────────────────────────────────────────────
 async function loadCriminalRecords() {
   const cid = document.getElementById("criminal-cid").value;
@@ -544,11 +461,7 @@ let bioStream = null;
 async function startBioCamera() {
   try {
     bioStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width:      { ideal: 1280 },
-        height:     { ideal: 720  },
-        facingMode: "user"
-      }
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }
     });
     const video = document.getElementById("bio-video");
     video.srcObject = bioStream;
@@ -561,6 +474,8 @@ async function startBioCamera() {
 
     document.getElementById("bio-verify-face-btn").disabled = false;
     document.getElementById("bio-enroll-btn").disabled = false;
+    document.getElementById("bio-enroll-fp-btn").disabled = false;
+    document.getElementById("bio-verify-fp-btn").disabled = false;
     toast("Camera started", "ok");
     acidLog(`BIO camera started for citizen ${document.getElementById("bio-cid").value || "?"}`);
   } catch (e) {
@@ -569,10 +484,7 @@ async function startBioCamera() {
 }
 
 function stopBioCamera() {
-  if (bioStream) {
-    bioStream.getTracks().forEach(t => t.stop());
-    bioStream = null;
-  }
+  if (bioStream) { bioStream.getTracks().forEach(t => t.stop()); bioStream = null; }
   const video = document.getElementById("bio-video");
   if (video) { video.srcObject = null; video.style.display = "none"; }
 
@@ -586,27 +498,59 @@ function stopBioCamera() {
   if (vfBtn) vfBtn.disabled = true;
   const enrBtn = document.getElementById("bio-enroll-btn");
   if (enrBtn) enrBtn.disabled = true;
+  const fpEnrBtn = document.getElementById("bio-enroll-fp-btn");
+  if (fpEnrBtn) fpEnrBtn.disabled = true;
+  const fpVerBtn = document.getElementById("bio-verify-fp-btn");
+  if (fpVerBtn) fpVerBtn.disabled = true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  Capture a frame from the live camera and return { base64, hash }
-//  base64 → full data-URL JPEG  (sent to /documents/upload-photo)
-//  hash   → SHA-256 hex string  (stored in Biometric_Data.facial_scan_hash)
-// ─────────────────────────────────────────────────────────────────────────
+// Full-frame capture — used for face enroll/verify
 async function captureFrame() {
   const video = document.getElementById("bio-video");
   if (!video.videoWidth || !video.videoHeight) return null;
 
   const canvas = document.createElement("canvas");
-  canvas.width  = video.videoWidth;
+  canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   canvas.getContext("2d").drawImage(video, 0, 0);
 
   const base64 = canvas.toDataURL("image/jpeg", 0.92);
-  if (base64.length < 5000) return null;          // blank / dark frame guard
+  if (base64.length < 5000) return null;
 
-  // Compute SHA-256 of the raw JPEG bytes
   const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.92));
+  const buf = await blob.arrayBuffer();
+  const raw = await crypto.subtle.digest("SHA-256", buf);
+  const hash = Array.from(new Uint8Array(raw))
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+
+  return { base64, hash };
+}
+
+// Finger-zone crop capture — used for fingerprint enroll/verify
+// Crops the centre 40% width x 60% height of the frame where the
+// overlay box guides the officer to place the finger.
+async function captureFingerFrame() {
+  const video = document.getElementById("bio-video");
+  if (!video.videoWidth || !video.videoHeight) return null;
+
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+
+  // Crop region matches the overlay box drawn in drawFingerprintOverlay()
+  const cropW = Math.floor(vw * 0.40);
+  const cropH = Math.floor(vh * 0.60);
+  const cropX = Math.floor((vw - cropW) / 2);
+  const cropY = Math.floor((vh - cropH) / 2);
+
+  const canvas = document.createElement("canvas");
+  canvas.width  = cropW;
+  canvas.height = cropH;
+  canvas.getContext("2d").drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+  const base64 = canvas.toDataURL("image/jpeg", 0.95);   // higher quality for ridges
+  if (base64.length < 2000) return null;
+
+  const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.95));
   const buf  = await blob.arrayBuffer();
   const raw  = await crypto.subtle.digest("SHA-256", buf);
   const hash = Array.from(new Uint8Array(raw))
@@ -615,55 +559,289 @@ async function captureFrame() {
   return { base64, hash };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  ENROLL BIOMETRIC
-//
-//  Two independent operations happen in sequence:
-//
-//  1. POST /documents/upload-photo  → saves the JPEG to disk and inserts a
-//     row in Document (document_type = 'photo').  This is the reference
-//     image that verify_face will compare against.
-//
-//  2. POST /biometric/enroll        → upserts Biometric_Data with:
-//       facial_scan_hash = SHA-256 of the captured JPEG
-//       fingerprint_hash = value from the text field (empty = "")
-//
-//  Schema constraints respected:
-//    • Biometric_Data.facial_scan_hash  VARCHAR(256)  ← 64-char hex hash
-//    • Biometric_Data.fingerprint_hash  VARCHAR(256)  ← text field value
-//    • Document.document_type           ENUM('photo','signature','supporting_doc')
-// ─────────────────────────────────────────────────────────────────────────
-async function enrollBiometric() {
-  const r = await req("POST", "/biometric/enroll", {
-    citizen_id:       parseInt(document.getElementById("bio-cid").value),
-    fingerprint_hash: document.getElementById("bio-enroll-fp").value,
-    facial_scan_hash: "enrolled_face_" + document.getElementById("bio-cid").value
-  });
-  if (r.ok) toast("Biometric enrolled/updated", "ok");
-  else toast("Error: " + r.data.error, "err");
+// Draws a semi-transparent finger-zone overlay on top of the video.
+// Called on an animation loop while the fingerprint mode is active.
+let _fpOverlayActive = false;
+let _fpOverlayCanvas = null;
+
+function startFingerprintOverlay() {
+  const video = document.getElementById("bio-video");
+  if (_fpOverlayCanvas) return;   // already running
+
+  _fpOverlayCanvas = document.createElement("canvas");
+  _fpOverlayCanvas.style.position = 'absolute';
+  _fpOverlayCanvas.style.top = video.offsetTop + 'px';
+  _fpOverlayCanvas.style.left = video.offsetLeft + 'px';
+  _fpOverlayCanvas.style.width = video.offsetWidth + 'px';
+  _fpOverlayCanvas.style.height = video.offsetHeight + 'px';
+  _fpOverlayCanvas.style.pointerEvents = 'none';
+  _fpOverlayCanvas.style.borderRadius = '6px';
+  video.parentElement.style.position = "relative";
+  video.parentElement.appendChild(_fpOverlayCanvas);
+  _fpOverlayActive = true;
+  drawFingerprintOverlay();
 }
 
-async function verifyFingerprint() {
-  const r = await req("POST", "/biometric/verify-fingerprint", {
-    citizen_id:       parseInt(document.getElementById("bio-cid").value),
-    fingerprint_hash: document.getElementById("bio-fp").value
-  });
-  const div = document.getElementById("bio-result");
-  if (r.ok) {
-    const v = r.data.verified;
-    div.innerHTML = `<div class="msg-box ${v ? 'ok' : 'err'}" style="display:block;margin-top:10px">
-      Fingerprint: <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
-      &nbsp;| Method: ${r.data.method}
-    </div>`;
-    toast(v ? "Fingerprint verified!" : "Mismatch", v ? "ok" : "err");
+function stopFingerprintOverlay() {
+  _fpOverlayActive = false;
+  if (_fpOverlayCanvas) {
+    _fpOverlayCanvas.remove();
+    _fpOverlayCanvas = null;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-//  VERIFY FACE
-//  (No changes needed in the frontend — the backend verify_face route
-//   reads from the Document table which enrollBiometric() now populates.)
-// ─────────────────────────────────────────────────────────────────────────
+function drawFingerprintOverlay() {
+  if (!_fpOverlayActive || !_fpOverlayCanvas) return;
+
+  const video = document.getElementById("bio-video");
+  const c = _fpOverlayCanvas;
+  c.width  = video.offsetWidth  || 320;
+  c.height = video.offsetHeight || 240;
+
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  // Darken everything outside the crop zone
+  const bx = c.width  * 0.30;
+  const by = c.height * 0.20;
+  const bw = c.width  * 0.40;
+  const bh = c.height * 0.60;
+
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(0,  0,  c.width, c.height);   // full dark
+  ctx.clearRect(bx, by, bw, bh);             // cut out the finger zone
+
+  // Bright border around the finger zone
+  ctx.strokeStyle = "#00e5ff";
+  ctx.lineWidth   = 2;
+  ctx.strokeRect(bx, by, bw, bh);
+
+  // Corner tick marks
+  const t = 14;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth   = 3;
+  [[bx,by],[bx+bw,by],[bx,by+bh],[bx+bw,by+bh]].forEach(([x,y],i) => {
+    const sx = i % 2 === 0 ? 1 : -1;
+    const sy = i < 2       ? 1 : -1;
+    ctx.beginPath(); ctx.moveTo(x, y+sy*t); ctx.lineTo(x, y); ctx.lineTo(x+sx*t, y); ctx.stroke();
+  });
+
+  // Label
+  ctx.fillStyle = "#00e5ff";
+  ctx.font      = "bold 11px monospace";
+  ctx.fillText("PLACE FINGER HERE", bx + 8, by - 6);
+
+  requestAnimationFrame(drawFingerprintOverlay);
+}
+
+async function enrollBiometric() {
+  const cid = parseInt(document.getElementById("bio-cid").value);
+  const fp = (document.getElementById("bio-enroll-fp")?.value || "").trim();
+  const div = document.getElementById("bio-result");
+
+  if (!cid) { toast("Enter a Citizen ID", "err"); return; }
+  if (!bioStream) { toast("Start the camera first — a live photo is required to enroll a face", "warn"); return; }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">⏳ Capturing face…</div>`;
+
+  const frame = await captureFrame();
+  if (!frame) {
+    toast("Camera frame is empty — check lighting and try again", "err");
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      ❌ Could not capture a usable frame. Ensure good lighting and face the camera directly.
+    </div>`;
+    return;
+  }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">⏳ Saving face photo…</div>`;
+
+  try {
+    const photoResp = await req("POST", "/biometric/upload-photo", {
+      citizen_id: cid,
+      image: frame.base64
+    });
+
+    if (!photoResp.ok) {
+      const msg = photoResp.data?.error || `HTTP ${photoResp.status}`;
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ Photo save failed: ${msg}</div>`;
+      toast("Photo save failed", "err");
+      return;
+    }
+  } catch (e) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ Network error saving photo: ${e.message}</div>`;
+    toast("Network error", "err");
+    return;
+  }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">⏳ Storing biometric hash…</div>`;
+
+  try {
+    const bioResp = await req("POST", "/biometric/enroll", {
+      citizen_id: cid,
+      fingerprint_hash: fp,
+      facial_scan_hash: frame.hash
+    });
+
+    if (bioResp.ok) {
+      toast("Biometric enrolled ✓", "ok");
+      acidLog(`BIOMETRIC enrolled for citizen ${cid} | facial hash: ${frame.hash.substring(0, 16)}…`);
+      div.innerHTML = `<div class="msg-box ok" style="display:block;margin-top:10px">
+        ✅ ${bioResp.data.message}<br>
+        <small>
+          Face photo saved to Documents table.<br>
+          Facial hash: <code>${frame.hash.substring(0, 24)}…</code><br>
+          ${fp ? `Fingerprint hash stored: <code>${fp.substring(0, 24)}…</code>` : "No fingerprint enrolled."}
+        </small>
+      </div>`;
+    } else {
+      toast("Biometric enroll error: " + bioResp.data.error, "err");
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ ${bioResp.data.error}</div>`;
+    }
+  } catch (e) {
+    toast("Network error: " + e.message, "err");
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ Network error: ${e.message}</div>`;
+  }
+}
+
+// ── FINGERPRINT ENROLL (camera-based) ────────────────────────────────────
+// Point camera at finger → captures image → saves to Document table as
+// document_type='fingerprint_photo' → stores SHA-256 hash in fingerprint_hash
+async function enrollFingerprint() {
+  const cid = parseInt(document.getElementById("bio-cid").value);
+  const div = document.getElementById("bio-result");
+  if (!cid)       { toast("Enter a Citizen ID", "err"); return; }
+  if (!bioStream) { toast("Start the camera and point it at the finger", "warn"); return; }
+
+  startFingerprintOverlay();
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+    📷 Place finger flat inside the <strong>blue box</strong> on the camera…<br>
+    ⏳ Capturing in 3 seconds…
+  </div>`;
+
+  await new Promise(r => setTimeout(r, 3000));
+
+  const frame = await captureFingerFrame();
+  stopFingerprintOverlay();
+  if (!frame) {
+    toast("Camera frame is empty — check lighting", "err");
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      ❌ Could not capture a usable frame. Ensure good lighting and hold the finger steady inside the blue box.
+    </div>`;
+    return;
+  }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">⏳ Saving fingerprint photo…</div>`;
+
+  // Save image to Document table (document_type = 'fingerprint_photo' stored via supporting_doc)
+  try {
+    const photoResp = await req("POST", "/biometric/upload-fingerprint", {
+      citizen_id: cid,
+      image: frame.base64
+    });
+    if (!photoResp.ok) {
+      const msg = photoResp.data?.error || `HTTP ${photoResp.status}`;
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ Photo save failed: ${msg}</div>`;
+      toast("Photo save failed", "err");
+      return;
+    }
+  } catch (e) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ Network error: ${e.message}</div>`;
+    return;
+  }
+
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">⏳ Storing fingerprint hash…</div>`;
+
+  // Store SHA-256 of image in Biometric_Data.fingerprint_hash
+  try {
+    const bioResp = await req("POST", "/biometric/enroll", {
+      citizen_id:       cid,
+      fingerprint_hash: frame.hash,
+      facial_scan_hash: ""
+    });
+    if (bioResp.ok) {
+      toast("Fingerprint enrolled ✓", "ok");
+      acidLog(`BIOMETRIC fingerprint enrolled for citizen ${cid} | hash: ${frame.hash.substring(0,16)}…`);
+      div.innerHTML = `<div class="msg-box ok" style="display:block;margin-top:10px">
+        ✅ ${bioResp.data.message}<br>
+        <small>
+          Fingerprint photo saved to Documents table.<br>
+          Hash: <code>${frame.hash.substring(0, 24)}…</code>
+        </small>
+      </div>`;
+    } else {
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ ${bioResp.data.error}</div>`;
+    }
+  } catch (e) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">❌ Network error: ${e.message}</div>`;
+  }
+}
+
+// ── FINGERPRINT VERIFY (camera-based image matching) ─────────────────────
+// Point camera at finger → captures image → backend does OpenCV ORB matching
+// against stored fingerprint photo (same algorithm as face verify)
+async function verifyFingerprint() {
+  const cid = parseInt(document.getElementById("bio-cid").value);
+  if (!cid)       { toast("Enter a Citizen ID", "err"); return; }
+  if (!bioStream) { toast("Start the camera and point it at the finger", "warn"); return; }
+
+  const video = document.getElementById("bio-video");
+  if (!video.videoWidth || !video.videoHeight) {
+    toast("Camera not ready — wait a moment", "warn"); return;
+  }
+
+  const div = document.getElementById("bio-result");
+  startFingerprintOverlay();
+  div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px">
+    📷 Place the <strong>same finger</strong> flat inside the <strong>blue box</strong> (same angle as enrollment)…<br>
+    ⏳ Capturing in 3 seconds…
+  </div>`;
+
+  await new Promise(r => setTimeout(r, 3000));
+
+  const frame = await captureFingerFrame();
+  stopFingerprintOverlay();
+  if (!frame) { toast("Camera frame empty — check lighting", "err"); return; }
+
+  try {
+    const r = await req("POST", "/biometric/verify-fingerprint-image", {
+      citizen_id: cid,
+      image: frame.base64
+    });
+
+    if (!r.ok) {
+      div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+        <strong>Error:</strong> ${r.data.error || "Unknown error"}
+        ${r.status === 404 ? `<br><small>→ Enroll this citizen's fingerprint first (camera must be on).</small>` : ""}
+        ${r.status === 501 ? `<br><small>→ Run: <code>pip install opencv-python</code> in your backend venv.</small>` : ""}
+      </div>`;
+      toast("Fingerprint verify failed: " + (r.data.error || r.status), "err");
+      return;
+    }
+
+    const v    = r.data.verified;
+    const conf = r.data.confidence != null ? `${r.data.confidence}%` : "—";
+    const note = r.data.note   ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>` : "";
+    const reason = r.data.reason ? `<br><small>${r.data.reason}</small>` : "";
+
+    div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
+      Fingerprint: <strong>${v ? "✅ VERIFIED" : "❌ NOT MATCHED"}</strong>
+      &nbsp;| Confidence: <strong>${conf}</strong>
+      &nbsp;| Method: ${r.data.method}
+      ${reason}${note}
+    </div>`;
+
+    toast(v ? "Fingerprint verified!" : "Fingerprint not matched", v ? "ok" : "err");
+    acidLog(`BIOMETRIC fp verify citizen ${cid}: ${v ? "MATCH" : "NO MATCH"} (${conf}) via ${r.data.method}`);
+
+  } catch (e) {
+    div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
+      <strong>Network error</strong> — is the Flask backend running?<br>
+      <small>${e.message}</small>
+    </div>`;
+    toast("Network error: " + e.message, "err");
+  }
+}
+
 async function verifyFace() {
   const cid = parseInt(document.getElementById("bio-cid").value);
   if (!cid)       { toast("Enter a Citizen ID", "err"); return; }
@@ -689,26 +867,22 @@ async function verifyFace() {
   try {
     const r = await req("POST", "/biometric/verify-face", {
       citizen_id: cid,
-      image:      frame.base64
+      image: frame.base64
     });
 
     if (!r.ok) {
       div.innerHTML = `<div class="msg-box err" style="display:block;margin-top:10px">
         <strong>Error:</strong> ${r.data.error || "Unknown error"}
-        ${r.status === 404
-          ? `<br><small>→ Enroll this citizen's face first using the <b>Enroll Biometric</b> button (camera must be on).</small>`
-          : ""}
-        ${r.status === 501
-          ? `<br><small>→ Run: <code>pip install face_recognition</code> or <code>pip install opencv-python</code> in your backend venv.</small>`
-          : ""}
+        ${r.status === 404 ? `<br><small>→ Enroll this citizen's face first (camera must be on).</small>` : ""}
+        ${r.status === 501 ? `<br><small>→ Run: <code>pip install opencv-python</code> in your backend venv.</small>` : ""}
       </div>`;
       toast("Face verify failed: " + (r.data.error || r.status), "err");
       return;
     }
 
-    const v      = r.data.verified;
-    const conf   = r.data.confidence != null ? `${r.data.confidence}%` : "—";
-    const note   = r.data.note   ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>`   : "";
+    const v    = r.data.verified;
+    const conf = r.data.confidence != null ? `${r.data.confidence}%` : "—";
+    const note = r.data.note   ? `<br><small style="color:var(--text-muted)">${r.data.note}</small>` : "";
     const reason = r.data.reason ? `<br><small>${r.data.reason}</small>` : "";
 
     div.innerHTML = `<div class="msg-box ${v ? "ok" : "err"}" style="display:block;margin-top:10px">
@@ -730,26 +904,23 @@ async function verifyFace() {
   }
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────
-//  DEBUG HELPER  (dev only — call from browser console: bioDebug(7))
-// ─────────────────────────────────────────────────────────────────────────
 async function bioDebug(citizenId) {
   const r = await req("GET", `/biometric/debug/${citizenId}`);
   console.table(r.data);
   const div = document.getElementById("bio-result");
   div.innerHTML = `<div class="msg-box" style="display:block;margin-top:10px;font-family:monospace;font-size:0.78rem">
     <strong>Debug — Citizen ${citizenId}</strong><br>
-    Photo in DB:      <code>${r.data.photo?.db_path   || "none"}</code><br>
-    Resolved path:    <code>${r.data.photo?.resolved  || "—"}</code><br>
-    File exists:      <strong>${r.data.photo?.exists  ?? "—"}</strong>
+    Photo in DB:   <code>${r.data.photo?.db_path  || "none"}</code><br>
+    Resolved path: <code>${r.data.photo?.resolved || "—"}</code><br>
+    File exists:   <strong>${r.data.photo?.exists ?? "—"}</strong>
     &nbsp; Size: ${r.data.photo?.size_bytes ? (r.data.photo.size_bytes / 1024).toFixed(1) + " KB" : "—"}<br>
-    Biometric row:    ${r.data.biometric_row ? "✅ Yes" : "❌ No"}<br>
-    FP hash:          <code>${r.data.biometric_row?.fingerprint_hash?.substring(0,20) || "—"}…</code><br>
-    Facial hash:      <code>${r.data.biometric_row?.facial_scan_hash?.substring(0,20) || "—"}…</code><br>
-    Uploads dir:      <code>${r.data.uploads_dir}</code>
+    Biometric row: ${r.data.biometric_row ? "✅ Yes" : "❌ No"}<br>
+    FP hash:       <code>${r.data.biometric_row?.fingerprint_hash?.substring(0, 20) || "—"}…</code><br>
+    Facial hash:   <code>${r.data.biometric_row?.facial_scan_hash?.substring(0, 20) || "—"}…</code><br>
+    Uploads dir:   <code>${r.data.uploads_dir}</code>
   </div>`;
 }
+
 // ── Complaints ────────────────────────────────────────────────────────────
 async function submitComplaint() {
   const r = await req("POST", "/complaints/", {
@@ -903,7 +1074,7 @@ async function loadAuditLog() {
   </table>`;
 }
 
-// ── Auto-login on page load ────────────────────────────────────────────────
+// ── Auto-login on page load ───────────────────────────────────────────────
 window.addEventListener("load", async () => {
   if (TOKEN) {
     const r = await req("GET", "/auth/me");
