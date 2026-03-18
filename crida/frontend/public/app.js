@@ -181,32 +181,191 @@ async function generatePDF() {
 
 // ── Family Tree ───────────────────────────────────────────────────────────
 async function loadFamilyTree() {
-  const cid = document.getElementById("family-cid").value;
-  const r   = await req("GET", `/family-tree/${cid}`);
-  const div = document.getElementById("family-result");
-  if (!r.ok) { div.innerHTML = `<p style="color:var(--danger)">${r.data.error || "Not found"}</p>`; return; }
-  const d = r.data;
-  let html = `<div style="margin-top:14px">
-    <p><strong>${d.citizen?.full_name}</strong> &nbsp;
-       <code>${d.citizen?.national_id_number}</code> &nbsp;
-       <span class="badge">${d.citizen?.gender}</span> &nbsp;
-       <span class="badge ${d.citizen?.status === 'active' ? 'success' : 'danger'}">${d.citizen?.status}</span>
-    </p>
-    ${d.spouse
-      ? `<p style="margin-top:8px">&#128141; Spouse: <strong>${d.spouse.spouse_name}</strong> (ID: ${d.spouse.spouse_id})</p>`
-      : "<p style='margin-top:8px;color:var(--text-muted)'>No spouse on record</p>"}
-    <p style="margin:10px 0 6px;color:var(--text-muted);font-size:0.78rem">${d.tree_summary?.total_relations} relations found</p>
-    <div>`;
-  (d.relationships || []).forEach(rel => {
-    html += `<div class="tree-node">
-      <div><strong>${rel.full_name}</strong></div>
-      <div class="rel-type">${rel.relationship_type} &nbsp;·&nbsp; ID ${rel.citizen_id}</div>
-    </div>`;
-  });
-  html += `</div></div>`;
-  div.innerHTML = html;
-}
+  const cid = document.getElementById('family-cid').value;
 
+  if (!cid) {
+    alert("Enter Citizen ID");
+    return;
+  }
+
+  try {
+    const r = await req("GET", `/family-tree/${cid}`);
+
+    if (!r.ok) {
+      throw new Error(r.data.error || "Failed");
+    }
+
+    renderTree(r.data);
+
+  } catch (e) {
+    document.getElementById('family-result').innerHTML =
+      `<div style="color:red;">Error: ${e.message}</div>`;
+  }
+}
+function renderTree(data) {
+  _treeData = data;
+
+  const parents = [];
+  const children = [];
+  const siblings = [];
+  const others = [];
+  const seen = new Set();
+
+  [
+    ...(data.relationships || []).map(r => ({ ...r, _rel: r.relationship_type })),
+    ...(data.reverse_relations || []).map(r => ({ ...r, _rel: r.relationship_type }))
+  ].forEach(r => {
+    if (seen.has(r.citizen_id)) return;
+    seen.add(r.citizen_id);
+
+    const rel = r._rel;
+
+    if (['Father','Mother','Grandfather','Grandmother'].includes(rel)) {
+      parents.push(r);
+    } else if (['Son','Daughter','Child','Grandson','Granddaughter'].includes(rel)) {
+      children.push(r);
+    } else if (['Brother','Sister','Sibling','Brother-in-law','Sister-in-law'].includes(rel)) {
+      siblings.push(r);
+    } else {
+      others.push(r);
+    }
+  });
+
+  const root = data.citizen;
+  const spouse = data.spouse;
+
+  let html = `<div class="ft-tree">`;
+
+  // PARENTS
+  if (parents.length) {
+    html += `
+      <div class="ft-row-wrap">
+        <div class="ft-section-label">Parents</div>
+        <div class="ft-row">
+          ${parents.map(p => personNode(p, p._rel, false, 52)).join('')}
+        </div>
+      </div>
+      <div class="ft-vline" style="height:30px;background:#85B7EB"></div>
+    `;
+  }
+
+  // MIDDLE
+  html += `<div class="ft-row" style="align-items:center;gap:30px;flex-wrap:wrap">`;
+
+  // SIBLINGS
+  if (siblings.length) {
+    html += `
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="ft-section-label">Siblings</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          ${siblings.map(p => personNode(p, p._rel, false, 50)).join('')}
+        </div>
+      </div>
+      <div style="width:25px;height:2px;background:#ccc"></div>
+    `;
+  }
+
+  // ROOT
+  html += `
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <div class="ft-root-label">Root</div>
+      ${personNode(root, null, true, 70)}
+    </div>
+  `;
+
+  // SPOUSE
+  if (spouse) {
+    const spouseRel = root.gender === 'Male' ? 'Wife' : 'Husband';
+
+    html += `
+      <div style="width:25px;height:2px;background:#EF9F27"></div>
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div class="ft-section-label">${spouseRel}</div>
+        ${personNode({
+          citizen_id: spouse.spouse_id,
+          full_name: spouse.spouse_name,
+          _rel: spouseRel
+        }, spouseRel, false, 50)}
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+
+  // CHILDREN
+  if (children.length) {
+    html += `
+      <div class="ft-vline" style="height:30px;background:#97C459"></div>
+      <div class="ft-row-wrap">
+        <div class="ft-section-label">Children</div>
+        <div class="ft-row">
+          ${children.map(p => personNode(p, p._rel, false, 52)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // OTHERS
+  if (others.length) {
+    html += `
+      <div style="margin-top:20px">
+        <div class="ft-section-label">Others</div>
+        <div class="ft-row">
+          ${others.map(p => personNode(p, p._rel, false, 48)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+
+  document.getElementById('family-result').innerHTML = html;
+}
+function personNode(person, relation, isRoot = false, size = 60) {
+  const initials = person.full_name
+    ? person.full_name.split(" ").map(n => n[0]).join("").toUpperCase()
+    : "?";
+
+  return `
+    <div style="
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      margin:6px;
+    ">
+      
+      <div style="
+        width:${size}px;
+        height:${size}px;
+        border-radius:50%;
+        background:${isRoot ? '#4CAF50' : '#2C3E50'};
+        color:white;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-weight:bold;
+        font-size:${size/3}px;
+        border:${isRoot ? '3px solid #FFD700' : '2px solid #555'};
+      ">
+        ${initials}
+      </div>
+
+      <div style="margin-top:6px;font-size:12px;text-align:center">
+        ${person.full_name || "Unknown"}
+      </div>
+
+      ${relation ? `
+        <div style="
+          font-size:10px;
+          color:#aaa;
+          margin-top:2px;
+        ">
+          ${relation}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
 // ── Criminal Records ──────────────────────────────────────────────────────
 async function loadCriminalRecords() {
   const cid = document.getElementById("criminal-cid").value;
