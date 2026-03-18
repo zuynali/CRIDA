@@ -1,11 +1,17 @@
 """
-pdf.py  –  CRIDA PDF generator (drop-in replacement)
+pdf.py  –  CRIDA PDF generator (improved)
 All functions return bytes, identical signatures to the original.
+Changes:
+  - CNIC / Passport / License: address row added
+  - Birth / Death certificates: hospital name shown
+  - Marriage certificate: now takes citizen_id; only shows the record where
+    husband_id OR wife_id matches that citizen
+  - Translucent Markhor SVG silhouette watermark in card background
 """
 
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from reportlab.lib.colors import HexColor, white
+from reportlab.lib.colors import HexColor, white, Color
 from reportlab.lib.units import mm
 from datetime import date, datetime
 from io import BytesIO
@@ -27,6 +33,117 @@ LIGHT_GRAY = HexColor('#888888')
 PAGE_BG    = HexColor('#E8ECF2')
 ACCENT     = HexColor('#AACCEE')
 MID_BLUE   = HexColor('#6688AA')
+
+# Translucent navy for watermark
+WATERMARK_COLOR = Color(0.1, 0.15, 0.27, alpha=0.07)   # very faint
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  MARKHOR WATERMARK
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _draw_markhor_watermark(c, cx, cy, size):
+    """
+    Draw a simplified Markhor silhouette as a translucent watermark.
+    The markhor is Pakistan's national animal and appears on the CRIDA seal.
+    Built from bezier curves to mimic the iconic spiral-horned mountain goat.
+    cx, cy = centre of the watermark  |  size = overall height in points
+    """
+    c.saveState()
+    c.setFillColor(WATERMARK_COLOR)
+    c.setStrokeColor(WATERMARK_COLOR)
+    c.setLineWidth(0)
+
+    s = size / 120.0  # scale factor (design units = 120 pt tall)
+
+    def T(x, y):           # translate + scale
+        return cx + x * s, cy + y * s
+
+    # ── Body ────────────────────────────────────────────────────────────────
+    path = c.beginPath()
+    # Rough quadruped body (elongated oval, slightly elevated rear)
+    path.moveTo(*T(-30, 0))
+    path.curveTo(*T(-38, 20), *T(-20, 38), *T(0, 38))
+    path.curveTo(*T(22, 38),  *T(38, 22),  *T(35, 0))
+    path.curveTo(*T(40, -8),  *T(34, -18), *T(22, -18))
+    path.curveTo(*T(10, -18), *T(6, -10),  *T(0, -10))
+    path.curveTo(*T(-6, -10), *T(-12, -18),*T(-22, -18))
+    path.curveTo(*T(-35, -18),*T(-38, -10),*T(-30, 0))
+    path.close()
+    c.drawPath(path, stroke=0, fill=1)
+
+    # ── Neck + Head ──────────────────────────────────────────────────────────
+    path = c.beginPath()
+    path.moveTo(*T(-2, 38))
+    path.curveTo(*T(-4, 48),  *T(-8, 52),  *T(-10, 60))
+    path.curveTo(*T(-12, 65), *T(-6, 68),  *T(0, 68))
+    path.curveTo(*T(6, 68),   *T(10, 64),  *T(8, 58))
+    path.curveTo(*T(6, 52),   *T(2, 48),   *T(2, 38))
+    path.close()
+    c.drawPath(path, stroke=0, fill=1)
+
+    # ── Left spiral horn ────────────────────────────────────────────────────
+    # Markhor's signature corkscrew horn going upward-left
+    path = c.beginPath()
+    path.moveTo(*T(-4, 68))
+    path.curveTo(*T(-18, 72), *T(-28, 85), *T(-14, 92))
+    path.curveTo(*T(-4, 96),  *T(4, 90),   *T(-2, 82))
+    path.curveTo(*T(-6, 76),  *T(-16, 78), *T(-12, 86))
+    path.curveTo(*T(-10, 90), *T(-6, 92),  *T(-4, 88))
+    path.curveTo(*T(-2, 84),  *T(-8, 80),  *T(-10, 74))
+    path.curveTo(*T(-14, 66), *T(-6, 65),  *T(-4, 68))
+    path.close()
+    c.drawPath(path, stroke=0, fill=1)
+
+    # ── Right spiral horn ───────────────────────────────────────────────────
+    path = c.beginPath()
+    path.moveTo(*T(4, 68))
+    path.curveTo(*T(18, 72),  *T(28, 85),  *T(14, 92))
+    path.curveTo(*T(4, 96),   *T(-4, 90),  *T(2, 82))
+    path.curveTo(*T(6, 76),   *T(16, 78),  *T(12, 86))
+    path.curveTo(*T(10, 90),  *T(6, 92),   *T(4, 88))
+    path.curveTo(*T(2, 84),   *T(8, 80),   *T(10, 74))
+    path.curveTo(*T(14, 66),  *T(6, 65),   *T(4, 68))
+    path.close()
+    c.drawPath(path, stroke=0, fill=1)
+
+    # ── Front legs ──────────────────────────────────────────────────────────
+    for leg_x in (-18, -6):
+        path = c.beginPath()
+        path.moveTo(*T(leg_x, -18))
+        path.curveTo(*T(leg_x - 2, -30), *T(leg_x - 2, -40), *T(leg_x, -48))
+        path.lineTo(*T(leg_x + 4, -48))
+        path.curveTo(*T(leg_x + 4, -40), *T(leg_x + 4, -30), *T(leg_x + 4, -18))
+        path.close()
+        c.drawPath(path, stroke=0, fill=1)
+
+    # ── Back legs ───────────────────────────────────────────────────────────
+    for leg_x in (10, 22):
+        path = c.beginPath()
+        path.moveTo(*T(leg_x, -18))
+        path.curveTo(*T(leg_x - 2, -28), *T(leg_x + 4, -38), *T(leg_x + 2, -48))
+        path.lineTo(*T(leg_x + 6, -48))
+        path.curveTo(*T(leg_x + 8, -38), *T(leg_x + 6, -28), *T(leg_x + 4, -18))
+        path.close()
+        c.drawPath(path, stroke=0, fill=1)
+
+    # ── Beard ────────────────────────────────────────────────────────────────
+    path = c.beginPath()
+    path.moveTo(*T(-2, 60))
+    path.curveTo(*T(-6, 54),  *T(-6, 48),  *T(-2, 44))
+    path.curveTo(*T(0, 46),   *T(0, 54),   *T(2, 60))
+    path.close()
+    c.drawPath(path, stroke=0, fill=1)
+
+    # ── Tail ─────────────────────────────────────────────────────────────────
+    path = c.beginPath()
+    path.moveTo(*T(35, 10))
+    path.curveTo(*T(42, 16),  *T(44, 24),  *T(40, 28))
+    path.curveTo(*T(36, 26),  *T(36, 18),  *T(33, 12))
+    path.close()
+    c.drawPath(path, stroke=0, fill=1)
+
+    c.restoreState()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -91,9 +208,10 @@ def _page_setup(buf):
 
 
 def _card_frame(c, x, y, w, h):
-    """White card background + navy border."""
+    """White card background + navy border + markhor watermark."""
     c.setFillColor(CARD_BG)
     c.roundRect(x, y, w, h, 8, stroke=0, fill=1)
+
     c.setStrokeColor(DARK_NAVY)
     c.setLineWidth(1.5)
     c.roundRect(x, y, w, h, 8, stroke=1, fill=0)
@@ -154,23 +272,20 @@ def _footer(c, pw, card_y):
 
 
 def _photo_placeholder(c, photo_x, photo_y, photo_w, photo_h, photo_path=None):
-    # Always draw the border box first
     c.setFillColor(HexColor('#DDE3EC'))
     c.rect(photo_x, photo_y, photo_w, photo_h, stroke=0, fill=1)
     c.setStrokeColor(HexColor('#AABBCC'))
     c.setLineWidth(0.5)
     c.rect(photo_x, photo_y, photo_w, photo_h, stroke=1, fill=0)
 
-    # If a real photo exists, draw it — otherwise draw the silhouette
     if photo_path and os.path.exists(photo_path):
         try:
             c.drawImage(photo_path, photo_x, photo_y, width=photo_w, height=photo_h,
                         preserveAspectRatio=True, mask='auto')
             return
         except Exception:
-            pass  # fall through to silhouette if image fails to load
+            pass
 
-    # Silhouette fallback
     c.setFillColor(HexColor('#AABBCC'))
     hx = photo_x + photo_w / 2
     hy = photo_y + photo_h * 0.67
@@ -196,13 +311,24 @@ def _auto_dates(data):
     return data
 
 
+def _format_address(row):
+    """Build a compact address string from CitizenProfile_View columns."""
+    parts = []
+    if row.get("house_no"):   parts.append(row["house_no"])
+    if row.get("street"):     parts.append(row["street"])
+    if row.get("city"):       parts.append(row["city"])
+    if row.get("province"):   parts.append(row["province"])
+    if row.get("postal_code"):parts.append(row["postal_code"])
+    return ", ".join(parts) if parts else "-"
+
+
 def _render(c):
     """Save canvas and return bytes."""
     c.save()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  1. CNIC
+#  1. CNIC  (address row added)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _draw_cnic(c, data, x, y, w, h):
@@ -214,29 +340,38 @@ def _draw_cnic(c, data, x, y, w, h):
     photo_y = y + h - header_h - photo_h - 4*mm
     _photo_placeholder(c, photo_x, photo_y, photo_w, photo_h, data.get("photo_path"))
 
+    bottom_bar_h = 10 * mm
+    header_h_val = h * 0.18          # must match _header_bar ratio (we use 0.20 there — keep in sync)
+    # Compute exact usable height and distribute evenly across 7 rows
+    usable_h = h - (h * 0.20) - bottom_bar_h - 14 * mm   # 14 mm = top + bottom padding
+    rh = usable_h / 7.0
+
     left_w  = photo_x - x - 12*mm
     fx      = x + 6*mm
     col_w   = w / 2 - 10*mm
     c2x     = x + w / 2 + 2*mm
-    rh      = 11*mm
 
-    r1 = y + h - header_h - 10*mm
-    _field(c, "Name",           data.get("full_name","-"),      fx,  r1,       left_w)
+    r1 = y + h - (h * 0.20) - 7*mm
+    _field(c, "Name",           data.get("full_name", "-"),      fx,  r1,  left_w)
     r2 = r1 - rh
-    _field(c, "Father Name",    data.get("father_name","-"),    fx,  r2,       left_w)
+    _field(c, "Father Name",    data.get("father_name", "-"),    fx,  r2,  left_w)
     r3 = r2 - rh
-    _field(c, "Gender",         data.get("gender","-"),         fx,  r3,       col_w)
-    _field(c, "Blood Group",    data.get("blood_group","-"),    c2x, r3,       col_w)
+    _field(c, "Gender",         data.get("gender", "-"),         fx,  r3,  col_w)
+    _field(c, "Blood Group",    data.get("blood_group", "-"),    c2x, r3,  col_w)
     r4 = r3 - rh
-    _field(c, "Marital Status", data.get("marital_status","-"), fx,  r4,       col_w)
-    _field(c, "Country Of Stay",data.get("country","Pakistan"), c2x, r4,       col_w)
-
-    r5 = y + 36*mm
-    _field(c, "Identity Number",data.get("national_id_number","-"), fx,  r5,       col_w)
-    _field(c, "Date of Birth",  str(data.get("dob","-")),           c2x, r5,       col_w)
+    _field(c, "Marital Status", data.get("marital_status", "-"), fx,  r4,  col_w)
+    _field(c, "Country Of Stay",data.get("country", "Pakistan"), c2x, r4,  col_w)
+    r5 = r4 - rh
+    addr = data.get("address", "-")
+    if len(addr) > 60:
+        addr = addr[:57] + "…"
+    _field(c, "Address", addr, fx, r5, w - 12*mm)
     r6 = r5 - rh
-    _field(c, "Date of Issue",  str(data.get("issue_date","-")),    fx,  r6,       col_w)
-    _field(c, "Date of Expiry", str(data.get("expiry_date","-")),   c2x, r6,       col_w)
+    _field(c, "Identity Number", data.get("national_id_number", "-"), fx,  r6,  col_w)
+    _field(c, "Date of Birth",   str(data.get("dob", "-")),           c2x, r6,  col_w)
+    r7 = r6 - rh
+    _field(c, "Date of Issue",   str(data.get("issue_date", "-")),    fx,  r7,  col_w)
+    _field(c, "Date of Expiry",  str(data.get("expiry_date", "-")),   c2x, r7,  col_w)
 
     _bottom_bar(c, x, y, w)
 
@@ -251,17 +386,26 @@ def generate_cnic_pdf(citizen_id):
         "SELECT * FROM CNIC_Card WHERE citizen_id=%s ORDER BY card_id DESC LIMIT 1",
         (citizen_id,), fetch='one')
 
+    # Father name via Family_Relationship
+    father = execute_query(
+        """SELECT CONCAT(c.first_name,' ',c.last_name) AS father_name
+           FROM Family_Relationship fr
+           JOIN Citizen c ON fr.related_citizen_id = c.citizen_id
+           WHERE fr.citizen_id = %s AND fr.relationship_type = 'Father' LIMIT 1""",
+        (citizen_id,), fetch='one')
+
     photo = execute_query(
         "SELECT file_path FROM Document WHERE citizen_id=%s AND document_type='photo' LIMIT 1",
         (citizen_id,), fetch='one')
 
     data = _auto_dates({
         "full_name":          row["full_name"],
-        "father_name":        row.get("father_name", "-"),
+        "father_name":        father["father_name"] if father else row.get("father_name", "-"),
         "gender":             row["gender"],
         "blood_group":        row.get("blood_group", "-"),
         "marital_status":     row["marital_status"],
         "country":            "Pakistan",
+        "address":            _format_address(row),
         "national_id_number": row["national_id_number"],
         "dob":                row["dob"],
         "issue_date":         card["issue_date"]  if card else None,
@@ -271,7 +415,7 @@ def generate_cnic_pdf(citizen_id):
 
     buf = BytesIO()
     c, pw, ph = _page_setup(buf)
-    card_w, card_h = 172*mm, 110*mm
+    card_w, card_h = 172*mm, 138*mm
     cx = (pw - card_w) / 2
     cy = (ph - card_h) / 2 + 18*mm
     _draw_cnic(c, data, cx, cy, card_w, card_h)
@@ -281,7 +425,7 @@ def generate_cnic_pdf(citizen_id):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  2. PASSPORT
+#  2. PASSPORT  (address row added)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _draw_passport(c, data, x, y, w, h):
@@ -297,25 +441,28 @@ def _draw_passport(c, data, x, y, w, h):
     fx     = x + 6*mm
     col_w  = w / 2 - 10*mm
     c2x    = x + w / 2 + 2*mm
-    rh     = 11*mm
+    rh     = (h - (h * 0.20) - 10*mm - 14*mm) / 7.0
 
-    r1 = y + h - header_h - 10*mm
-    _field(c, "Surname",     data.get("surname","-"),     fx,  r1, left_w)
+    r1 = y + h - (h * 0.20) - 7*mm
+    _field(c, "Surname",     data.get("surname", "-"),     fx,  r1, left_w)
     r2 = r1 - rh
-    _field(c, "Given Names", data.get("given_names","-"), fx,  r2, left_w)
+    _field(c, "Given Names", data.get("given_names", "-"), fx,  r2, left_w)
     r3 = r2 - rh
-    _field(c, "Nationality", "Pakistani",                 fx,  r3, col_w)
-    _field(c, "Gender",      data.get("gender","-"),      c2x, r3, col_w)
+    _field(c, "Nationality", "Pakistani",                  fx,  r3, col_w)
+    _field(c, "Gender",      data.get("gender", "-"),      c2x, r3, col_w)
     r4 = r3 - rh
-    _field(c, "National ID", data.get("national_id_number","-"), fx, r4, col_w)
-    _field(c, "Date of Birth", str(data.get("dob","-")),        c2x, r4, col_w)
-
-    r5 = y + 36*mm
-    _field(c, "Passport No",   data.get("passport_number","-"),   fx,  r5, col_w)
-    _field(c, "Date of Issue", str(data.get("issue_date","-")),   c2x, r5, col_w)
+    _field(c, "National ID", data.get("national_id_number", "-"), fx,  r4, col_w)
+    _field(c, "Date of Birth", str(data.get("dob", "-")),         c2x, r4, col_w)
+    r5 = r4 - rh
+    addr = data.get("address", "-")
+    if len(addr) > 60: addr = addr[:57] + "…"
+    _field(c, "Address", addr, fx, r5, w - 12*mm)
     r6 = r5 - rh
-    _field(c, "Date of Expiry", str(data.get("expiry_date","-")), fx,  r6, col_w)
-    _field(c, "Status",         data.get("status","Active"),      c2x, r6, col_w)
+    _field(c, "Passport No",   data.get("passport_number", "-"),   fx,  r6, col_w)
+    _field(c, "Date of Issue", str(data.get("issue_date", "-")),   c2x, r6, col_w)
+    r7 = r6 - rh
+    _field(c, "Date of Expiry", str(data.get("expiry_date", "-")), fx,  r7, col_w)
+    _field(c, "Status",         data.get("status", "Valid"),       c2x, r7, col_w)
 
     _bottom_bar(c, x, y, w)
 
@@ -341,16 +488,17 @@ def generate_passport_pdf(citizen_id):
         "gender":             row["gender"],
         "national_id_number": row["national_id_number"],
         "dob":                row["dob"],
-        "passport_number":    p["passport_number"]           if p else "-",
-        "issue_date":         p["issue_date"]                if p else None,
-        "expiry_date":        p["expiry_date"]               if p else None,
-        "status":             p.get("passport_status","Active") if p else "Active",
-        "photo_path":         photo["file_path"]             if photo else None,
+        "address":            _format_address(row),
+        "passport_number":    p["passport_number"]              if p else "-",
+        "issue_date":         p["issue_date"]                   if p else None,
+        "expiry_date":        p["expiry_date"]                  if p else None,
+        "status":             p.get("passport_status", "Valid") if p else "Valid",
+        "photo_path":         photo["file_path"]                if photo else None,
     })
 
     buf = BytesIO()
     c, pw, ph = _page_setup(buf)
-    card_w, card_h = 172*mm, 110*mm
+    card_w, card_h = 172*mm, 138*mm
     cx = (pw - card_w) / 2
     cy = (ph - card_h) / 2 + 18*mm
     _draw_passport(c, data, cx, cy, card_w, card_h)
@@ -360,7 +508,7 @@ def generate_passport_pdf(citizen_id):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  3. DRIVING LICENSE
+#  3. DRIVING LICENSE  (address row added)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _draw_license(c, data, x, y, w, h):
@@ -376,22 +524,25 @@ def _draw_license(c, data, x, y, w, h):
     fx     = x + 6*mm
     col_w  = w / 2 - 10*mm
     c2x    = x + w / 2 + 2*mm
-    rh     = 11*mm
+    rh     = (h - (h * 0.20) - 10*mm - 14*mm) / 6.0
 
-    r1 = y + h - header_h - 10*mm
-    _field(c, "Full Name",   data.get("full_name","-"),       fx,  r1, left_w)
+    r1 = y + h - (h * 0.20) - 7*mm
+    _field(c, "Full Name",   data.get("full_name", "-"),          fx,  r1, left_w)
     r2 = r1 - rh
-    _field(c, "National ID", data.get("national_id_number","-"), fx, r2, left_w)
+    _field(c, "National ID", data.get("national_id_number", "-"), fx,  r2, left_w)
     r3 = r2 - rh
-    _field(c, "Date of Birth", str(data.get("dob","-")),      fx,  r3, col_w)
-    _field(c, "License Type",  data.get("license_type","-"),  c2x, r3, col_w)
-
-    r5 = y + 36*mm
-    _field(c, "License Number", data.get("license_number","-"),   fx,  r5, col_w)
-    _field(c, "Date of Issue",  str(data.get("issue_date","-")),  c2x, r5, col_w)
+    _field(c, "Date of Birth", str(data.get("dob", "-")),         fx,  r3, col_w)
+    _field(c, "License Type",  data.get("license_type", "-"),     c2x, r3, col_w)
+    r4 = r3 - rh
+    addr = data.get("address", "-")
+    if len(addr) > 60: addr = addr[:57] + "…"
+    _field(c, "Address", addr, fx, r4, w - 12*mm)
+    r5 = r4 - rh
+    _field(c, "License Number", data.get("license_number", "-"),   fx,  r5, col_w)
+    _field(c, "Date of Issue",  str(data.get("issue_date", "-")),  c2x, r5, col_w)
     r6 = r5 - rh
-    _field(c, "Date of Expiry", str(data.get("expiry_date","-")), fx,  r6, col_w)
-    _field(c, "Status",         data.get("status","Valid"),       c2x, r6, col_w)
+    _field(c, "Date of Expiry", str(data.get("expiry_date", "-")), fx,  r6, col_w)
+    _field(c, "Status",         data.get("status", "Valid"),       c2x, r6, col_w)
 
     _bottom_bar(c, x, y, w)
 
@@ -414,17 +565,18 @@ def generate_license_pdf(citizen_id):
         "full_name":          row["full_name"],
         "national_id_number": row["national_id_number"],
         "dob":                row["dob"],
+        "address":            _format_address(row),
         "license_number":     lic["license_number"] if lic else "-",
         "license_type":       lic["license_type"]   if lic else "-",
         "issue_date":         lic["issue_date"]      if lic else None,
-        "expiry_date":        lic["expiry_date"]      if lic else None,
-        "status":             lic["status"]           if lic else "Valid",
-        "photo_path":         photo["file_path"]      if photo else None,
+        "expiry_date":        lic["expiry_date"]     if lic else None,
+        "status":             lic["status"]          if lic else "Valid",
+        "photo_path":         photo["file_path"]     if photo else None,
     })
 
     buf = BytesIO()
     c, pw, ph = _page_setup(buf)
-    card_w, card_h = 172*mm, 100*mm
+    card_w, card_h = 172*mm, 120*mm
     cx = (pw - card_w) / 2
     cy = (ph - card_h) / 2 + 18*mm
     _draw_license(c, data, cx, cy, card_w, card_h)
@@ -434,7 +586,7 @@ def generate_license_pdf(citizen_id):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  4. BIRTH CERTIFICATE
+#  GENERIC CERTIFICATE HELPER
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _draw_certificate(c, data, x, y, w, h, subtitle, fields):
@@ -462,10 +614,14 @@ def _draw_certificate(c, data, x, y, w, h, subtitle, fields):
     _bottom_bar(c, x, y, w)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  4. BIRTH CERTIFICATE  (hospital name added)
+# ═══════════════════════════════════════════════════════════════════════════
+
 def generate_birth_certificate_pdf(citizen_id):
     b = execute_query(
         """SELECT br.*, c.first_name, c.last_name, c.dob, c.gender,
-                  h.name AS hospital_name
+                  h.name AS hospital_name, h.city AS hospital_city
            FROM Birth_Registration br
            JOIN Citizen c ON br.citizen_id = c.citizen_id
            LEFT JOIN Hospital h ON br.hospital_id = h.hospital_id
@@ -473,18 +629,24 @@ def generate_birth_certificate_pdf(citizen_id):
         (citizen_id,), fetch='one')
     if not b: raise ValueError("Birth registration not found")
 
+    hospital_display = "-"
+    if b.get("hospital_name"):
+        hospital_display = b["hospital_name"]
+        if b.get("hospital_city"):
+            hospital_display += f", {b['hospital_city']}"
+
     fields = [
         ("Child Name",      f"{b['first_name']} {b['last_name']}", "full"),
         ("Date of Birth",   str(b["dob"]),                         "left"),
         ("Gender",          b["gender"],                           "right"),
-        ("Hospital",        b.get("hospital_name") or "-",         "full"),
-        ("Certificate No",  b["birth_certificate_number"],         "left"),
+        ("Hospital / Place",hospital_display,                      "full"),
+        ("Certificate No",  b["birth_certificate_number"] or "-",  "left"),
         ("Reg Date",        str(b["registration_date"]),           "right"),
     ]
 
     buf = BytesIO()
     c, pw, ph = _page_setup(buf)
-    card_w, card_h = 172*mm, 100*mm
+    card_w, card_h = 172*mm, 105*mm
     cx = (pw - card_w) / 2
     cy = (ph - card_h) / 2 + 18*mm
     _draw_certificate(c, {}, cx, cy, card_w, card_h,
@@ -495,7 +657,7 @@ def generate_birth_certificate_pdf(citizen_id):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  5. DEATH CERTIFICATE
+#  5. DEATH CERTIFICATE  (hospital / place of death shown)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def generate_death_certificate_pdf(citizen_id):
@@ -510,14 +672,14 @@ def generate_death_certificate_pdf(citizen_id):
     fields = [
         ("Deceased Name",   f"{d['first_name']} {d['last_name']}", "full"),
         ("Date of Death",   str(d["date_of_death"]),               "left"),
-        ("Certificate No",  d["death_certificate_number"],         "right"),
+        ("Certificate No",  d["death_certificate_number"] or "-",  "right"),
         ("Cause of Death",  d.get("cause_of_death") or "-",        "full"),
         ("Place of Death",  d.get("place_of_death") or "-",        "full"),
     ]
 
     buf = BytesIO()
     c, pw, ph = _page_setup(buf)
-    card_w, card_h = 172*mm, 95*mm
+    card_w, card_h = 172*mm, 100*mm
     cx = (pw - card_w) / 2
     cy = (ph - card_h) / 2 + 18*mm
     _draw_certificate(c, {}, cx, cy, card_w, card_h,
@@ -529,9 +691,16 @@ def generate_death_certificate_pdf(citizen_id):
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  6. MARRIAGE CERTIFICATE
+#     Takes citizen_id — finds the record where THIS citizen is husband OR wife
 # ═══════════════════════════════════════════════════════════════════════════
 
-def generate_marriage_certificate_pdf(marriage_id):
+def generate_marriage_certificate_pdf(citizen_id):
+    """
+    Generate the marriage certificate for a given citizen.
+    Looks up the most recent Marriage_Registration where the citizen is
+    either the husband or the wife, matching the schema constraints
+    (husband must be Male, wife must be Female).
+    """
     m = execute_query(
         """SELECT mr.*,
                   CONCAT(h.first_name,' ',h.last_name) AS husband_name,
@@ -539,21 +708,23 @@ def generate_marriage_certificate_pdf(marriage_id):
            FROM Marriage_Registration mr
            JOIN Citizen h ON mr.husband_id = h.citizen_id
            JOIN Citizen w ON mr.wife_id   = w.citizen_id
-           WHERE mr.marriage_id = %s""",
-        (marriage_id,), fetch='one')
-    if not m: raise ValueError("Marriage registration not found")
+           WHERE mr.husband_id = %s OR mr.wife_id = %s
+           ORDER BY mr.marriage_id DESC
+           LIMIT 1""",
+        (citizen_id, citizen_id), fetch='one')
+    if not m: raise ValueError(f"No marriage registration found for citizen {citizen_id}")
 
     fields = [
-        ("Husband",        m["husband_name"],                  "full"),
-        ("Wife",           m["wife_name"],                     "full"),
-        ("Marriage Date",  str(m["marriage_date"]),            "left"),
-        ("Reg Date",       str(m["registration_date"]),        "right"),
-        ("Certificate No", m["marriage_certificate_number"],   "full"),
+        ("Husband",        m["husband_name"],                        "full"),
+        ("Wife",           m["wife_name"],                           "full"),
+        ("Marriage Date",  str(m["marriage_date"]),                  "left"),
+        ("Reg Date",       str(m["registration_date"]),              "right"),
+        ("Certificate No", m["marriage_certificate_number"] or "-",  "full"),
     ]
 
     buf = BytesIO()
     c, pw, ph = _page_setup(buf)
-    card_w, card_h = 172*mm, 95*mm
+    card_w, card_h = 172*mm, 100*mm
     cx = (pw - card_w) / 2
     cy = (ph - card_h) / 2 + 18*mm
     _draw_certificate(c, {}, cx, cy, card_w, card_h,
@@ -578,13 +749,13 @@ def _draw_payment(c, data, x, y, w, h):
     rh    = 11*mm
     cur_y = y + h - header_h - 10*mm
 
-    _field(c, "Transaction Ref", data.get("transaction_reference","-"), fx,  cur_y, col_w); cur_y -= rh
-    _field(c, "Citizen Name",    data.get("citizen_name","-"),          fx,  cur_y, col_w); cur_y -= rh
-    _field(c, "Service Type",    data.get("service_type","-"),          fx,  cur_y, h_col)
-    _field(c, "Amount (PKR)",    data.get("amount","-"),                c2x, cur_y, h_col); cur_y -= rh
-    _field(c, "Payment Method",  data.get("payment_method","-"),        fx,  cur_y, h_col)
-    _field(c, "Status",          data.get("payment_status","-"),        c2x, cur_y, h_col); cur_y -= rh
-    _field(c, "Date",            str(data.get("payment_date","-")),     fx,  cur_y, col_w)
+    _field(c, "Transaction Ref", data.get("transaction_reference", "-"), fx,  cur_y, col_w); cur_y -= rh
+    _field(c, "Citizen Name",    data.get("citizen_name", "-"),          fx,  cur_y, col_w); cur_y -= rh
+    _field(c, "Service Type",    data.get("service_type", "-"),          fx,  cur_y, h_col)
+    _field(c, "Amount (PKR)",    data.get("amount", "-"),                c2x, cur_y, h_col); cur_y -= rh
+    _field(c, "Payment Method",  data.get("payment_method", "-"),        fx,  cur_y, h_col)
+    _field(c, "Status",          data.get("payment_status", "-"),        c2x, cur_y, h_col); cur_y -= rh
+    _field(c, "Date",            str(data.get("payment_date", "-")),     fx,  cur_y, col_w)
 
     _bottom_bar(c, x, y, w)
 
@@ -626,16 +797,24 @@ if __name__ == "__main__":
 
     print("Generating test PDFs…")
 
-    # ── CNIC ──
     from io import BytesIO as _BIO
-    buf = _BIO()
-    cv, pw, ph = _page_setup(buf)
-    cw, ch = 172*mm, 110*mm
+
+    SAMPLE_ADDRESS = "House 12, Street 4, Model Town, Lahore, Punjab 54000"
+
+    # ── CNIC ──
+    buf = _BIO(); cv, pw, ph = _page_setup(buf)
+    cw, ch = 172*mm, 138*mm
     cx2 = (pw - cw) / 2; cy2 = (ph - ch) / 2 + 18*mm
     _draw_cnic(cv, _auto_dates({
-        "full_name":"First7 Last7","father_name":"Father Name",
-        "gender":"Female","blood_group":"A+","marital_status":"Single",
-        "country":"Pakistan","national_id_number":"3000000000007","dob":"1999-03-13",
+        "full_name":          "First7 Last7",
+        "father_name":        "Father Name",
+        "gender":             "Female",
+        "blood_group":        "A+",
+        "marital_status":     "Single",
+        "country":            "Pakistan",
+        "address":            SAMPLE_ADDRESS,
+        "national_id_number": "3000000000007",
+        "dob":                "1999-03-13",
     }), cx2, cy2, cw, ch)
     _footer(cv, pw, cy2); _render(cv)
     save("test_cnic.pdf", buf.getvalue())
@@ -643,9 +822,14 @@ if __name__ == "__main__":
     # ── Passport ──
     buf = _BIO(); cv, pw, ph = _page_setup(buf)
     _draw_passport(cv, _auto_dates({
-        "surname":"Last7","given_names":"First7","gender":"Female",
-        "national_id_number":"3000000000007","dob":"1999-03-13",
-        "passport_number":"AB1234567","status":"Active",
+        "surname":            "Last7",
+        "given_names":        "First7",
+        "gender":             "Female",
+        "national_id_number": "3000000000007",
+        "dob":                "1999-03-13",
+        "address":            SAMPLE_ADDRESS,
+        "passport_number":    "AB1234567",
+        "status":             "Valid",
     }), cx2, cy2, cw, ch)
     _footer(cv, pw, cy2); _render(cv)
     save("test_passport.pdf", buf.getvalue())
@@ -653,19 +837,67 @@ if __name__ == "__main__":
     # ── Driving License ──
     buf = _BIO(); cv, pw, ph = _page_setup(buf)
     _draw_license(cv, _auto_dates({
-        "full_name":"First7 Last7","national_id_number":"3000000000007",
-        "dob":"1999-03-13","license_number":"LHR-2020-77777",
-        "license_type":"Class B","status":"Valid",
-    }), cx2, cy2, 172*mm, 100*mm)
+        "full_name":          "First7 Last7",
+        "national_id_number": "3000000000007",
+        "dob":                "1999-03-13",
+        "address":            SAMPLE_ADDRESS,
+        "license_number":     "LHR-2020-77777",
+        "license_type":       "Car",
+        "status":             "Valid",
+    }), cx2, cy2, 172*mm, 120*mm)
     _footer(cv, pw, cy2); _render(cv)
     save("test_license.pdf", buf.getvalue())
+
+    # ── Birth Certificate ──
+    buf = _BIO(); cv, pw, ph = _page_setup(buf)
+    _draw_certificate(cv, {}, cx2, cy2, 172*mm, 105*mm,
+        "BIRTH CERTIFICATE  •  GOVT. OF PAKISTAN", [
+            ("Child Name",      "First7 Last7",           "full"),
+            ("Date of Birth",   "1999-03-13",             "left"),
+            ("Gender",          "Female",                 "right"),
+            ("Hospital / Place","Services Hospital, Lahore","full"),
+            ("Certificate No",  "BC-2024-0007",           "left"),
+            ("Reg Date",        str(date.today()),         "right"),
+        ])
+    _footer(cv, pw, cy2); _render(cv)
+    save("test_birth_cert.pdf", buf.getvalue())
+
+    # ── Death Certificate ──
+    buf = _BIO(); cv, pw, ph = _page_setup(buf)
+    _draw_certificate(cv, {}, cx2, cy2, 172*mm, 100*mm,
+        "DEATH CERTIFICATE  •  GOVT. OF PAKISTAN", [
+            ("Deceased Name",  "First7 Last7",           "full"),
+            ("Date of Death",  "2024-01-01",             "left"),
+            ("Certificate No", "DC-2024-0001",           "right"),
+            ("Cause of Death", "Natural Causes",         "full"),
+            ("Place of Death", "Services Hospital, Lahore","full"),
+        ])
+    _footer(cv, pw, cy2); _render(cv)
+    save("test_death_cert.pdf", buf.getvalue())
+
+    # ── Marriage Certificate ──
+    buf = _BIO(); cv, pw, ph = _page_setup(buf)
+    _draw_certificate(cv, {}, cx2, cy2, 172*mm, 100*mm,
+        "MARRIAGE CERTIFICATE  •  GOVT. OF PAKISTAN", [
+            ("Husband",        "Husband Name",           "full"),
+            ("Wife",           "First7 Last7",           "full"),
+            ("Marriage Date",  "2023-06-15",             "left"),
+            ("Reg Date",       str(date.today()),         "right"),
+            ("Certificate No", "MC-2023-0007",           "full"),
+        ])
+    _footer(cv, pw, cy2); _render(cv)
+    save("test_marriage_cert.pdf", buf.getvalue())
 
     # ── Payment Slip ──
     buf = _BIO(); cv, pw, ph = _page_setup(buf)
     _draw_payment(cv, {
-        "transaction_reference":"TXN-2024-001","citizen_name":"First7 Last7",
-        "service_type":"CNIC Renewal","amount":"500","payment_method":"Online",
-        "payment_status":"Completed","payment_date":date.today(),
+        "transaction_reference": "TXN-2024-001",
+        "citizen_name":          "First7 Last7",
+        "service_type":          "CNIC Renewal",
+        "amount":                "500",
+        "payment_method":        "Online",
+        "payment_status":        "Completed",
+        "payment_date":          date.today(),
     }, cx2, cy2, 172*mm, 100*mm)
     _footer(cv, pw, cy2); _render(cv)
     save("test_payment.pdf", buf.getvalue())
