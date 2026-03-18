@@ -9,5 +9,19 @@ Pillow>=10.4.0
 rembg==2.0.57
 numpy==1.26.4
 reportlab==3.6.13
-reportlab
 requests
+
+# ── Biometric — Face Verification ─────────────────────────────────────────
+# OpenCV for image processing and ORB feature matching (face verify fallback)
+opencv-python==4.13.0.92
+
+# ── Optional: ML-based face recognition (better accuracy than OpenCV ORB) ──
+# Requires Python <= 3.12. On Python 3.13 install will succeed but runtime
+# will fail — leave commented out if you are on Python 3.13.
+#
+# Step 1: pip install dlib
+# Step 2: pip install face_recognition
+# Step 3: pip install git+https://github.com/ageitgey/face_recognition_models
+#
+# dlib
+# face_recognition
