@@ -1,5 +1,5 @@
 const API = "http://localhost:5000/api/v1";
-let TOKEN  = localStorage.getItem("crida_token") || null;
+let TOKEN = localStorage.getItem("crida_token") || null;
 let OFFICER = null;
 
 // ── Role-based tab visibility ─────────────────────────────────────────────
@@ -68,17 +68,17 @@ async function doLogin() {
   const msg = document.getElementById("login-msg");
   msg.className = "msg-box";
   const r = await req("POST", "/auth/login", {
-    email:    document.getElementById("login-email").value,
+    email: document.getElementById("login-email").value,
     password: document.getElementById("login-pass").value
   });
   if (r.ok) {
-    TOKEN   = r.data.token;
+    TOKEN = r.data.token;
     OFFICER = r.data.officer;
     localStorage.setItem("crida_token", TOKEN);
     msg.className = "msg-box ok";
     msg.textContent = "Logged in as " + OFFICER.full_name;
     document.getElementById("user-name").textContent = OFFICER.full_name;
-    document.getElementById("user-role").textContent  = OFFICER.role_name;
+    document.getElementById("user-role").textContent = OFFICER.role_name;
     document.getElementById("user-info").classList.remove("hidden");
 
     // Apply role-based nav visibility BEFORE switching tabs
@@ -115,12 +115,12 @@ async function loadDashboard() {
     req("GET", "/audit/?limit=1")
   ]);
   const stats = [
-    { n: cr.ok ? (cr.data.total || "—") : "—",         l: "Total Citizens" },
-    { n: OFFICER?.role_name || "—",                     l: "Your Role" },
-    { n: OFFICER?.access_level || "—",                  l: "Access Level" },
-    { n: nr.ok ? (nr.data.unread_count ?? "—") : "—",  l: "Unread Alerts" },
-    { n: ar.ok ? (ar.data.total || "—") : "N/A",        l: "Audit Entries" },
-    { n: "MySQL 8.0",                                    l: "Database" },
+    { n: cr.ok ? (cr.data.total || "—") : "—", l: "Total Citizens" },
+    { n: OFFICER?.role_name || "—", l: "Your Role" },
+    { n: OFFICER?.access_level || "—", l: "Access Level" },
+    { n: nr.ok ? (nr.data.unread_count ?? "—") : "—", l: "Unread Alerts" },
+    { n: ar.ok ? (ar.data.total || "—") : "N/A", l: "Audit Entries" },
+    { n: "MySQL 8.0", l: "Database" },
   ];
   document.getElementById("stats-grid").innerHTML = stats.map(s =>
     `<div class="stat-card">
@@ -161,13 +161,13 @@ async function searchCitizens() {
 // ── PDF ───────────────────────────────────────────────────────────────────
 async function generatePDF() {
   const type = document.getElementById("pdf-type").value;
-  const id   = document.getElementById("pdf-id").value;
-  const msg  = document.getElementById("pdf-msg");
+  const id = document.getElementById("pdf-id").value;
+  const msg = document.getElementById("pdf-msg");
   msg.className = "msg-box";
   try {
     const blob = await req("GET", `/pdf/${type}/${id}`, null, true);
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
     a.href = url; a.download = `${type}_${id}.pdf`; a.click();
     msg.className = "msg-box ok";
     msg.textContent = `PDF downloaded: ${type}_${id}.pdf`;
@@ -220,12 +220,14 @@ function renderTree(data) {
 
     const rel = r._rel;
 
-    if (['Father','Mother','Grandfather','Grandmother'].includes(rel)) {
+    if (['Father', 'Mother', 'Grandfather', 'Grandmother'].includes(rel)) {
       parents.push(r);
-    } else if (['Son','Daughter','Child','Grandson','Granddaughter'].includes(rel)) {
+    } else if (['Son', 'Daughter', 'Child', 'Grandson', 'Granddaughter'].includes(rel)) {
       children.push(r);
-    } else if (['Brother','Sister','Sibling','Brother-in-law','Sister-in-law'].includes(rel)) {
+    } else if (['Brother', 'Sister', 'Sibling', 'Brother-in-law', 'Sister-in-law'].includes(rel)) {
       siblings.push(r);
+    } else if (['Husband', 'Wife', 'Spouse'].includes(rel)) {
+      // Handled separately by the spouse section
     } else {
       others.push(r);
     }
@@ -282,10 +284,10 @@ function renderTree(data) {
       <div style="display:flex;flex-direction:column;align-items:center">
         <div class="ft-section-label">${spouseRel}</div>
         ${personNode({
-          citizen_id: spouse.spouse_id,
-          full_name: spouse.spouse_name,
-          _rel: spouseRel
-        }, spouseRel, false, 50)}
+      citizen_id: spouse.spouse_id,
+      full_name: spouse.spouse_name,
+      _rel: spouseRel
+    }, spouseRel, false, 50)}
       </div>
     `;
   }
@@ -344,7 +346,7 @@ function personNode(person, relation, isRoot = false, size = 60) {
         align-items:center;
         justify-content:center;
         font-weight:bold;
-        font-size:${size/3}px;
+        font-size:${size / 3}px;
         border:${isRoot ? '3px solid #FFD700' : '2px solid #555'};
       ">
         ${initials}
@@ -370,7 +372,7 @@ function personNode(person, relation, isRoot = false, size = 60) {
 async function loadCriminalRecords() {
   const cid = document.getElementById("criminal-cid").value;
   const url = cid ? `/security/criminal-records?citizen_id=${cid}` : "/security/criminal-records";
-  const r   = await req("GET", url);
+  const r = await req("GET", url);
   const div = document.getElementById("criminal-table");
   const rows = r.data.records || [];
   if (!rows.length) { div.innerHTML = "<p>No records found.</p>"; return; }
@@ -381,7 +383,7 @@ async function loadCriminalRecords() {
       <td>${rec.case_number || "—"}</td>
       <td>${rec.citizen_name}</td>
       <td>${rec.offense}</td>
-      <td>${String(rec.offense_date).substring(0,10)}</td>
+      <td>${String(rec.offense_date).substring(0, 10)}</td>
       <td><span class="badge ${rec.status === 'Convicted' ? 'danger' : rec.status === 'Acquitted' ? 'success' : 'warning'}">${rec.status}</span></td>
       <td>${rec.court_name || "—"}</td>
     </tr>`).join("")}
@@ -395,12 +397,12 @@ function showAddCriminal() {
 
 async function addCriminalRecord() {
   const r = await req("POST", "/security/criminal-records", {
-    citizen_id:   parseInt(document.getElementById("cr-cid").value),
-    case_number:  document.getElementById("cr-case").value,
-    offense:      document.getElementById("cr-offense").value,
+    citizen_id: parseInt(document.getElementById("cr-cid").value),
+    case_number: document.getElementById("cr-case").value,
+    offense: document.getElementById("cr-offense").value,
     offense_date: document.getElementById("cr-date").value,
-    status:       document.getElementById("cr-status").value,
-    court_name:   document.getElementById("cr-court").value
+    status: document.getElementById("cr-status").value,
+    court_name: document.getElementById("cr-court").value
   });
   if (r.ok) {
     toast("Criminal record added", "ok");
@@ -411,7 +413,7 @@ async function addCriminalRecord() {
 
 // ── Watchlist ─────────────────────────────────────────────────────────────
 async function loadWatchlist() {
-  const r   = await req("GET", "/security/watchlist");
+  const r = await req("GET", "/security/watchlist");
   const div = document.getElementById("watchlist-table");
   if (!r.ok) { div.innerHTML = `<p style="color:var(--text-muted)">Requires Security Officer or Admin role.</p>`; return; }
   const rows = r.data.watchlist || [];
@@ -423,8 +425,8 @@ async function loadWatchlist() {
       <td>${w.citizen_name} (${w.citizen_id})</td>
       <td><span class="badge warning">${w.watchlist_type}</span></td>
       <td>${w.reason}</td>
-      <td>${String(w.added_date).substring(0,10)}</td>
-      <td>${w.expiry_date ? String(w.expiry_date).substring(0,10) : "—"}</td>
+      <td>${String(w.added_date).substring(0, 10)}</td>
+      <td>${w.expiry_date ? String(w.expiry_date).substring(0, 10) : "—"}</td>
     </tr>`).join("")}
   </table>`;
 }
@@ -437,8 +439,8 @@ function showAddWatchlist() {
 async function addToWatchlist() {
   const expiry = document.getElementById("wl-expiry").value || undefined;
   const r = await req("POST", "/security/watchlist", {
-    citizen_id:     parseInt(document.getElementById("wl-cid").value),
-    reason:         document.getElementById("wl-reason").value,
+    citizen_id: parseInt(document.getElementById("wl-cid").value),
+    reason: document.getElementById("wl-reason").value,
     watchlist_type: document.getElementById("wl-type").value,
     ...(expiry ? { expiry_date: expiry } : {})
   });
@@ -454,8 +456,8 @@ async function submitUpdateRequest() {
   const r = await req("POST", "/update-requests/", {
     citizen_id: parseInt(document.getElementById("upd-cid").value),
     field_name: document.getElementById("upd-field").value,
-    new_value:  document.getElementById("upd-value").value,
-    reason:     document.getElementById("upd-reason").value
+    new_value: document.getElementById("upd-value").value,
+    reason: document.getElementById("upd-reason").value
   });
   if (r.ok) {
     toast("Update request submitted (Pending)", "ok");
@@ -465,7 +467,7 @@ async function submitUpdateRequest() {
 }
 
 async function loadUpdateRequests() {
-  const r   = await req("GET", "/update-requests/?status=Pending");
+  const r = await req("GET", "/update-requests/?status=Pending");
   const div = document.getElementById("update-table");
   const rows = r.data.requests || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>No pending requests.</p>"; return; }
@@ -513,13 +515,13 @@ async function startCamera() {
 }
 
 async function capturePhoto() {
-  const video  = document.getElementById("cam-video");
+  const video = document.getElementById("cam-video");
   const canvas = document.getElementById("cam-canvas");
   canvas.getContext("2d").drawImage(video, 0, 0, 320, 240);
   const base64 = canvas.toDataURL("image/jpeg");
-  const cid    = document.getElementById("cam-cid").value;
-  const r      = await req("POST", "/camera/capture", { citizen_id: parseInt(cid), image: base64 });
-  const div    = document.getElementById("cam-result");
+  const cid = document.getElementById("cam-cid").value;
+  const r = await req("POST", "/camera/capture", { citizen_id: parseInt(cid), image: base64 });
+  const div = document.getElementById("cam-result");
   if (r.ok) {
     div.innerHTML = `<div class="msg-box ok" style="display:block;margin-top:10px">
       Photo captured!<br>
@@ -536,7 +538,7 @@ async function capturePhoto() {
 // ── Biometric ─────────────────────────────────────────────────────────────
 async function enrollBiometric() {
   const r = await req("POST", "/biometric/enroll", {
-    citizen_id:       parseInt(document.getElementById("bio-cid").value),
+    citizen_id: parseInt(document.getElementById("bio-cid").value),
     fingerprint_hash: document.getElementById("bio-enroll-fp").value,
     facial_scan_hash: "enrolled_face_" + document.getElementById("bio-cid").value
   });
@@ -546,7 +548,7 @@ async function enrollBiometric() {
 
 async function verifyFingerprint() {
   const r = await req("POST", "/biometric/verify-fingerprint", {
-    citizen_id:       parseInt(document.getElementById("bio-cid").value),
+    citizen_id: parseInt(document.getElementById("bio-cid").value),
     fingerprint_hash: document.getElementById("bio-fp").value
   });
   const div = document.getElementById("bio-result");
@@ -567,7 +569,7 @@ async function startBioCamera() {
 }
 
 async function verifyFace() {
-  const video  = document.getElementById("bio-video");
+  const video = document.getElementById("bio-video");
   const canvas = document.createElement("canvas");
   canvas.width = 240; canvas.height = 180;
   canvas.getContext("2d").drawImage(video, 0, 0, 240, 180);
@@ -590,8 +592,8 @@ async function verifyFace() {
 // ── Complaints ────────────────────────────────────────────────────────────
 async function submitComplaint() {
   const r = await req("POST", "/complaints/", {
-    citizen_id:  parseInt(document.getElementById("comp-cid").value),
-    subject:     document.getElementById("comp-subject").value,
+    citizen_id: parseInt(document.getElementById("comp-cid").value),
+    subject: document.getElementById("comp-subject").value,
     description: document.getElementById("comp-desc").value
   });
   if (r.ok) { toast("Complaint submitted", "ok"); loadComplaints(); }
@@ -599,7 +601,7 @@ async function submitComplaint() {
 }
 
 async function loadComplaints() {
-  const r   = await req("GET", "/complaints/");
+  const r = await req("GET", "/complaints/");
   const div = document.getElementById("complaints-table");
   const rows = r.data.complaints || [];
   if (!rows.length) { div.innerHTML = "<p style='margin-top:12px'>No complaints.</p>"; return; }
@@ -610,7 +612,7 @@ async function loadComplaints() {
       <td>${c.citizen_id}</td>
       <td>${c.subject}</td>
       <td><span class="badge ${c.status === 'Resolved' || c.status === 'Closed' ? 'success' : 'warning'}">${c.status}</span></td>
-      <td>${String(c.created_at).substring(0,10)}</td>
+      <td>${String(c.created_at).substring(0, 10)}</td>
     </tr>`).join("")}
   </table>`;
 }
@@ -619,18 +621,18 @@ async function loadComplaints() {
 async function loadUnreadCount() {
   const cid = document.getElementById("notif-cid").value;
   const url = cid ? `/notifications/unread-count?citizen_id=${cid}` : "/notifications/unread-count";
-  const r   = await req("GET", url);
+  const r = await req("GET", url);
   document.getElementById("notif-count").innerHTML =
     `<span class="badge warning">Unread: ${r.data.unread_count ?? 0}</span>`;
 }
 
 async function loadNotifications() {
-  const cid    = document.getElementById("notif-cid").value;
+  const cid = document.getElementById("notif-cid").value;
   const unread = document.getElementById("notif-unread").checked;
   let url = "/notifications/?";
-  if (cid)    url += `citizen_id=${cid}&`;
+  if (cid) url += `citizen_id=${cid}&`;
   if (unread) url += "unread=1";
-  const r   = await req("GET", url);
+  const r = await req("GET", url);
   const div = document.getElementById("notif-list");
   const rows = r.data.notifications || [];
   if (!rows.length) { div.innerHTML = "<p>No notifications found.</p>"; return; }
@@ -642,7 +644,7 @@ async function loadNotifications() {
       </div>
       <div class="notif-msg">${n.message}</div>
       <div class="notif-meta">
-        ${String(n.created_at).substring(0,19)} &nbsp;·&nbsp;
+        ${String(n.created_at).substring(0, 19)} &nbsp;·&nbsp;
         Citizen: ${n.citizen_id || "—"} &nbsp;·&nbsp;
         ${n.is_read ? "Read" : "<strong>Unread</strong>"}
         ${!n.is_read ? `&nbsp;<button onclick="markRead(${n.notification_id})" class="btn btn-sm btn-secondary" style="margin-left:8px">Mark Read</button>` : ""}
@@ -659,7 +661,7 @@ async function markRead(nid) {
 
 // ── Permissions ───────────────────────────────────────────────────────────
 async function loadPermissions() {
-  const r   = await req("GET", "/permissions/");
+  const r = await req("GET", "/permissions/");
   const div = document.getElementById("perms-table");
   if (!r.ok) {
     div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Requires Admin role.</p>`;
@@ -673,13 +675,13 @@ async function loadPermissions() {
       <td>${p.full_name} (${p.officer_id})</td>
       <td><span class="badge">${p.role_name}</span></td>
       <td><code>${p.permission_name}</code></td>
-      <td>${String(p.granted_at).substring(0,16)}</td>
+      <td>${String(p.granted_at).substring(0, 16)}</td>
     </tr>`).join("")}
   </table>`;
 }
 
 async function myPermissions() {
-  const r   = await req("GET", "/permissions/my-permissions");
+  const r = await req("GET", "/permissions/my-permissions");
   const div = document.getElementById("perms-table");
   const perms = r.data.permissions || [];
   div.innerHTML = `<div style="margin-top:14px">
@@ -692,7 +694,7 @@ async function myPermissions() {
 
 async function grantPermission() {
   const r = await req("POST", "/permissions/grant", {
-    officer_id:      parseInt(document.getElementById("perm-oid").value),
+    officer_id: parseInt(document.getElementById("perm-oid").value),
     permission_name: document.getElementById("perm-name").value
   });
   if (r.ok) { toast("Permission granted", "ok"); loadPermissions(); }
@@ -701,7 +703,7 @@ async function grantPermission() {
 
 async function revokePermission() {
   const r = await req("DELETE", "/permissions/revoke", {
-    officer_id:      parseInt(document.getElementById("perm-oid").value),
+    officer_id: parseInt(document.getElementById("perm-oid").value),
     permission_name: document.getElementById("perm-name").value
   });
   if (r.ok) { toast("Permission revoked", "warn"); loadPermissions(); }
@@ -710,14 +712,14 @@ async function revokePermission() {
 
 // ── Audit Log ─────────────────────────────────────────────────────────────
 async function loadAuditLog() {
-  const oid    = document.getElementById("audit-officer").value;
-  const tbl    = document.getElementById("audit-table-input").value;
+  const oid = document.getElementById("audit-officer").value;
+  const tbl = document.getElementById("audit-table-input").value;
   const action = document.getElementById("audit-action").value;
   let url = "/audit/?limit=30";
-  if (oid)    url += `&officer_id=${oid}`;
-  if (tbl)    url += `&table_name=${encodeURIComponent(tbl)}`;
+  if (oid) url += `&officer_id=${oid}`;
+  if (tbl) url += `&table_name=${encodeURIComponent(tbl)}`;
   if (action) url += `&action_type=${action}`;
-  const r   = await req("GET", url);
+  const r = await req("GET", url);
   const div = document.getElementById("audit-table-div");
   if (!r.ok) {
     div.innerHTML = `<p style="color:var(--text-muted);margin-top:12px">Requires Admin or Security Officer role.</p>`;
@@ -735,7 +737,7 @@ async function loadAuditLog() {
       <td>${l.table_name}</td>
       <td>${l.record_id ?? "—"}</td>
       <td><code>${l.ip_address || "—"}</code></td>
-      <td style="font-family:var(--font-mono);font-size:0.75rem">${String(l.timestamp).substring(0,19)}</td>
+      <td style="font-family:var(--font-mono);font-size:0.75rem">${String(l.timestamp).substring(0, 19)}</td>
     </tr>`).join("")}
   </table>`;
 }
@@ -747,7 +749,7 @@ window.addEventListener("load", async () => {
     if (r.ok) {
       OFFICER = r.data.officer;
       document.getElementById("user-name").textContent = OFFICER.full_name;
-      document.getElementById("user-role").textContent  = OFFICER.role_name;
+      document.getElementById("user-role").textContent = OFFICER.role_name;
       document.getElementById("user-info").classList.remove("hidden");
       applyRoleVisibility(OFFICER.role_name);
       document.querySelector("[data-tab='dashboard']").click();
