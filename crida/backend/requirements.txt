@@ -1,19 +1,19 @@
-Flask==3.0.3
-flask-cors==4.0.1
-flask-bcrypt==1.0.1
-PyJWT==2.8.0
-mysql-connector-python==8.3.0
-python-dotenv==1.0.1
-fpdf2==2.7.9
-Pillow>=10.4.0
-rembg==2.0.57
-numpy==1.26.4
-reportlab==3.6.13
-requests
+# Flask==3.0.3
+# flask-cors==4.0.1
+# flask-bcrypt==1.0.1
+# PyJWT==2.8.0
+# mysql-connector-python==8.3.0
+# python-dotenv==1.0.1
+# fpdf2==2.7.9
+# Pillow>=10.4.0
+# rembg==2.0.57
+# numpy==1.26.4
+# reportlab==3.6.13
+# requests
 
-# ── Biometric — Face Verification ─────────────────────────────────────────
-# OpenCV for image processing and ORB feature matching (face verify fallback)
-opencv-python==4.13.0.92
+# # ── Biometric — Face Verification ─────────────────────────────────────────
+# # OpenCV for image processing and ORB feature matching (face verify fallback)
+# opencv-python==4.13.0.92
 
 # ── Optional: ML-based face recognition (better accuracy than OpenCV ORB) ──
 # Requires Python <= 3.12. On Python 3.13 install will succeed but runtime
@@ -23,5 +23,27 @@ opencv-python==4.13.0.92
 # Step 2: pip install face_recognition
 # Step 3: pip install git+https://github.com/ageitgey/face_recognition_models
 #
+# dlib
+# face_recognition
+
+
+
+Flask==3.0.3
+flask-cors==4.0.1
+flask-bcrypt==1.0.1
+PyJWT==2.8.0
+mysql-connector-python==8.3.0
+python-dotenv==1.0.1
+fpdf2==2.7.9
+Pillow>=10.4.0
+rembg==2.0.57
+numpy>=2.0.0
+reportlab==3.6.13
+requests
+
+# ── Biometric — Face Verification ─────────────────────────────────────────
+opencv-python==4.13.0.92
+
+# ── Optional: ML-based face recognition ───────────────────────────────────
 # dlib
 # face_recognition
