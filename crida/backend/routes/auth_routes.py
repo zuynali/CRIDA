@@ -3,6 +3,7 @@ routes/auth_routes.py — Authentication Endpoints
 =================================================
 Endpoints:
   POST /api/v1/auth/login           — verify credentials, return JWT
+  POST /api/v1/auth/citizen-login   — citizen self-service login (NID + citizen_id)
   GET  /api/v1/auth/me              — return logged-in officer profile
   PUT  /api/v1/auth/change-password — change own password (bcrypt)
 
@@ -17,8 +18,10 @@ Password strategy:
 """
 
 import jwt
+import re
 import datetime
 import logging
+import os
 
 from flask import Blueprint, request, jsonify, g
 from flask_bcrypt import Bcrypt
@@ -103,6 +106,74 @@ def login():
             "role_name":    officer["role_name"],
             "access_level": officer["access_level"],
             "office_id":    officer["office_id"],
+        }
+    }), 200
+
+
+# ── POST /citizen-login ──────────────────────────────────────────────────
+@auth_bp.route("/citizen-login", methods=["POST"])
+def citizen_login():
+    """
+    POST /api/v1/auth/citizen-login
+    Body:    { "national_id_number": "1234567890123", "citizen_id": 7 }
+    Returns: { "token": "eyJ...", "citizen": {...} }
+
+    Verifies that the NID + citizen_id pair matches the Citizen table.
+    Issues a JWT with role = "Citizen" accepted by @token_required.
+    No officer account or DB changes needed.
+    """
+    data = request.json or {}
+    nid  = (data.get("national_id_number") or "").strip()
+    cid  = data.get("citizen_id")
+
+    if not nid or not cid:
+        return jsonify({"error": "national_id_number and citizen_id are required"}), 400
+
+    if not re.match(r'^\d{13}$', nid):
+        return jsonify({"error": "National ID must be exactly 13 digits"}), 400
+
+    # Verify NID + citizen_id pair exists
+    citizen = execute_query(
+        """SELECT citizen_id, first_name, last_name, national_id_number, status
+           FROM Citizen
+           WHERE citizen_id = %s AND national_id_number = %s""",
+        (cid, nid), fetch="one"
+    )
+
+    if not citizen:
+        return jsonify({"error": "No matching citizen found. Check your NID and Citizen ID."}), 404
+
+    if citizen["status"] == "deceased":
+        return jsonify({"error": "This citizen record is marked as deceased."}), 403
+
+    if citizen["status"] == "blacklisted":
+        return jsonify({"error": "Access denied. Contact your nearest CRIDA office."}), 403
+
+    # Issue JWT — officer_id field reused as citizen_id so @token_required works
+    secret = os.getenv("JWT_SECRET_KEY", Config.JWT_SECRET_KEY)
+    expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+    token  = jwt.encode(
+        {
+            "officer_id":  citizen["citizen_id"],
+            "role_name":   "Citizen",
+            "access_level": 0,
+            "citizen_id":  citizen["citizen_id"],
+            "exp":         expiry,
+        },
+        secret,
+        algorithm="HS256"
+    )
+
+    logger.info(f"Citizen portal login: citizen_id={citizen['citizen_id']}")
+
+    return jsonify({
+        "token": token,
+        "citizen": {
+            "citizen_id":          citizen["citizen_id"],
+            "first_name":          citizen["first_name"],
+            "last_name":           citizen["last_name"],
+            "national_id_number":  citizen["national_id_number"],
+            "status":              citizen["status"],
         }
     }), 200
 

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRIDA — Citizen Portal</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --green:#0a5c36;--green-mid:#0d7a49;--green-light:#16a365;
+      --green-pale:#e8f5ee;--green-glow:rgba(13,122,73,0.12);
+      --white:#ffffff;--off-white:#f7faf8;
+      --border:#c8e0d4;--border-dark:#a0c8b4;
+      --text:#0d1f15;--text-mid:#2d5c42;--text-muted:#6b9c80;
+      --gold:#c8962a;--danger:#c0392b;--warning:#d4860d;
+      --radius:10px;--shadow:0 2px 16px rgba(10,92,54,0.10);
+      --shadow-lg:0 8px 40px rgba(10,92,54,0.18);
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--off-white);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;min-height:100vh;position:relative;}
+
+    /* Markhor watermark */
+    body::before{
+      content:'';position:fixed;inset:0;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 280'%3E%3Cg fill='%230a5c36' opacity='0.04'%3E%3Cellipse cx='100' cy='170' rx='38' ry='50'/%3E%3Cellipse cx='100' cy='110' rx='16' ry='26' transform='rotate(-8 100 110)'/%3E%3Cellipse cx='106' cy='82' rx='18' ry='14' transform='rotate(-15 106 82)'/%3E%3Cellipse cx='118' cy='88' rx='10' ry='7' transform='rotate(-10 118 88)'/%3E%3Cellipse cx='122' cy='98' rx='5' ry='10' transform='rotate(15 122 98)'/%3E%3Cellipse cx='90' cy='62' rx='5' ry='18' transform='rotate(-35 90 62)'/%3E%3Cellipse cx='75' cy='44' rx='4' ry='14' transform='rotate(-55 75 44)'/%3E%3Cellipse cx='65' cy='30' rx='3' ry='10' transform='rotate(-70 65 30)'/%3E%3Cellipse cx='60' cy='20' rx='2' ry='7' transform='rotate(-80 60 20)'/%3E%3Cellipse cx='115' cy='60' rx='5' ry='18' transform='rotate(20 115 60)'/%3E%3Cellipse cx='130' cy='42' rx='4' ry='14' transform='rotate(40 130 42)'/%3E%3Cellipse cx='140' cy='28' rx='3' ry='10' transform='rotate(55 140 28)'/%3E%3Cellipse cx='144' cy='18' rx='2' ry='7' transform='rotate(65 144 18)'/%3E%3Crect x='82' y='210' width='12' height='50' rx='5' transform='rotate(-5 82 210)'/%3E%3Crect x='100' y='212' width='12' height='48' rx='5' transform='rotate(5 100 212)'/%3E%3Crect x='70' y='208' width='11' height='52' rx='5' transform='rotate(-12 70 208)'/%3E%3Crect x='116' y='208' width='11' height='52' rx='5' transform='rotate(8 116 208)'/%3E%3Cellipse cx='68' cy='155' rx='5' ry='15' transform='rotate(40 68 155)'/%3E%3Ccircle cx='113' cy='78' r='3'/%3E%3C/g%3E%3C/svg%3E");
+      background-size:320px 450px;background-position:center;background-repeat:repeat;
+      pointer-events:none;z-index:0;
+    }
+
+    .gov-stripe{background:var(--green);color:white;text-align:center;padding:6px;font-size:0.68rem;letter-spacing:.12em;font-weight:500;position:relative;z-index:10;}
+    .site-header{background:white;border-bottom:3px solid var(--green);box-shadow:var(--shadow);position:relative;z-index:10;}
+    .header-inner{max-width:1000px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+    .brand{display:flex;align-items:center;gap:14px;}
+    .emblem{width:52px;height:52px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(10,92,54,.3);}
+    .brand-text h1{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--green);letter-spacing:.04em;}
+    .brand-text p{font-size:.7rem;color:var(--text-muted);margin-top:1px;letter-spacing:.04em;}
+    .user-pill{background:var(--green-pale);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:.8rem;color:var(--text-mid);display:flex;align-items:center;gap:8px;}
+    .user-pill .dot{width:8px;height:8px;border-radius:50%;background:var(--green-light);animation:pulse 2s infinite;}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+    .portal{max-width:1000px;margin:0 auto;padding:28px 20px 60px;position:relative;z-index:1;}
+
+    /* Login */
+    .login-screen{min-height:calc(100vh - 120px);display:flex;align-items:center;justify-content:center;padding:40px 20px;}
+    .login-wrap{display:flex;max-width:820px;width:100%;box-shadow:var(--shadow-lg);border-radius:16px;overflow:hidden;}
+    .login-deco{background:var(--green);width:300px;flex-shrink:0;padding:44px 32px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;}
+    .login-deco::after{content:'';position:absolute;bottom:-40px;right:-40px;width:200px;height:260px;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 280'%3E%3Cg fill='white' opacity='0.1'%3E%3Cellipse cx='100' cy='170' rx='38' ry='50'/%3E%3Cellipse cx='100' cy='110' rx='16' ry='26' transform='rotate(-8 100 110)'/%3E%3Cellipse cx='106' cy='82' rx='18' ry='14' transform='rotate(-15 106 82)'/%3E%3Cellipse cx='118' cy='88' rx='10' ry='7' transform='rotate(-10 118 88)'/%3E%3Cellipse cx='90' cy='62' rx='5' ry='18' transform='rotate(-35 90 62)'/%3E%3Cellipse cx='75' cy='44' rx='4' ry='14' transform='rotate(-55 75 44)'/%3E%3Cellipse cx='65' cy='30' rx='3' ry='10' transform='rotate(-70 65 30)'/%3E%3Cellipse cx='115' cy='60' rx='5' ry='18' transform='rotate(20 115 60)'/%3E%3Cellipse cx='130' cy='42' rx='4' ry='14' transform='rotate(40 130 42)'/%3E%3Cellipse cx='140' cy='28' rx='3' ry='10' transform='rotate(55 140 28)'/%3E%3Crect x='82' y='210' width='12' height='50' rx='5' transform='rotate(-5 82 210)'/%3E%3Crect x='100' y='212' width='12' height='48' rx='5' transform='rotate(5 100 212)'/%3E%3C/g%3E%3C/svg%3E");
+      background-size:contain;background-repeat:no-repeat;pointer-events:none;}
+    .login-deco .deco-emblem{width:72px;height:72px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:18px;border:2px solid rgba(255,255,255,.25);}
+    .login-deco h2{font-family:'Playfair Display',serif;font-size:1.4rem;color:white;margin-bottom:8px;}
+    .login-deco p{color:rgba(255,255,255,.7);font-size:.78rem;line-height:1.6;}
+    .deco-divider{width:36px;height:2px;background:rgba(255,255,255,.3);margin:16px auto;}
+    .deco-features{list-style:none;text-align:left;width:100%;margin-top:4px;}
+    .deco-features li{color:rgba(255,255,255,.8);font-size:.75rem;padding:4px 0;display:flex;align-items:center;gap:8px;}
+    .deco-features li i{color:rgba(255,255,255,.5);width:14px;}
+
+    .login-form-panel{flex:1;background:white;padding:44px 36px;}
+    .login-form-panel h3{font-family:'Playfair Display',serif;font-size:1.25rem;color:var(--green);margin-bottom:4px;}
+    .login-form-panel .subtitle{font-size:.78rem;color:var(--text-muted);margin-bottom:26px;}
+
+    /* Nav */
+    .nav-tabs{display:flex;border-bottom:2px solid var(--border);margin-bottom:26px;overflow-x:auto;}
+    .nav-tab{padding:10px 16px;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;background:transparent;color:var(--text-muted);font-family:'IBM Plex Sans',sans-serif;font-size:.8rem;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s;white-space:nowrap;}
+    .nav-tab:hover{color:var(--green);}
+    .nav-tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:600;}
+    .notif-dot{width:7px;height:7px;border-radius:50%;background:var(--danger);display:none;}
+
+    /* Cards */
+    .card{background:white;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:16px;}
+    .card-header{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+    .card-icon{width:34px;height:34px;border-radius:8px;background:var(--green-pale);color:var(--green);display:flex;align-items:center;justify-content:center;}
+    .card-header h2{font-family:'Playfair Display',serif;font-size:.98rem;color:var(--green);}
+
+    /* Profile hero */
+    .profile-hero{background:linear-gradient(135deg,var(--green) 0%,var(--green-mid) 100%);border-radius:12px;padding:22px;margin-bottom:18px;display:flex;align-items:center;gap:18px;position:relative;overflow:hidden;}
+    .profile-hero::after{content:'';position:absolute;right:-30px;bottom:-30px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.06);}
+    .profile-avatar{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.2);border:3px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:white;flex-shrink:0;font-family:'Playfair Display',serif;}
+    .profile-hero-info h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:white;}
+    .profile-hero-info p{font-size:.75rem;color:rgba(255,255,255,.7);margin-top:2px;font-family:'IBM Plex Mono',monospace;}
+    .profile-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:10px;}
+    .profile-field{background:var(--off-white);border:1px solid var(--border);border-radius:8px;padding:12px 14px;transition:border-color .15s;}
+    .profile-field:hover{border-color:var(--green-light);}
+    .pf-label{font-size:.66rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
+    .pf-value{font-size:.86rem;font-weight:500;}
+
+    /* Doc grid */
+    .doc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;}
+    .doc-card{border:1px solid var(--border);border-radius:10px;padding:18px 14px;text-align:center;cursor:pointer;transition:all .18s;background:white;}
+    .doc-card:hover{border-color:var(--green);box-shadow:0 4px 16px var(--green-glow);transform:translateY(-2px);}
+    .doc-card .dc-icon{width:46px;height:46px;border-radius:12px;background:var(--green-pale);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:18px;margin:0 auto 10px;}
+    .doc-card .dc-name{font-size:.8rem;font-weight:600;margin-bottom:6px;}
+    .doc-card .dc-btn{font-size:.7rem;color:var(--green);display:flex;align-items:center;justify-content:center;gap:4px;}
+
+    /* Badges */
+    .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.68rem;font-weight:600;letter-spacing:.02em;}
+    .badge-success{background:#e6f7f0;color:#0a6641;}
+    .badge-warning{background:#fef3e2;color:#a06010;}
+    .badge-danger{background:#fde8e8;color:#b91c1c;}
+    .badge-info{background:var(--green-pale);color:var(--green);}
+
+    /* App items */
+    .app-item{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:white;transition:border-color .15s;}
+    .app-item:hover{border-color:var(--green-light);}
+    .ai-type{font-weight:600;font-size:.86rem;}
+    .ai-meta{font-size:.73rem;color:var(--text-muted);margin-top:2px;}
+
+    /* Notification */
+    .notif-card{border:1px solid var(--border);border-left:4px solid var(--green-light);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:white;}
+    .notif-card.unread{border-left-color:var(--gold);background:#fffdf5;}
+    .nc-title{font-weight:600;font-size:.86rem;}
+    .nc-msg{font-size:.8rem;color:var(--text-mid);margin-top:3px;}
+    .nc-time{font-size:.68rem;color:var(--text-muted);margin-top:5px;font-family:'IBM Plex Mono',monospace;}
+
+    /* Forms */
+    .form-group{margin-bottom:15px;}
+    .form-group label{display:block;font-size:.72rem;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+    .form-group input,.form-group textarea,.form-group select{width:100%;padding:10px 12px;background:white;border:1.5px solid var(--border);border-radius:7px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:.86rem;transition:border-color .15s,box-shadow .15s;outline:none;}
+    .form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(13,122,73,.1);}
+
+    /* Buttons */
+    .btn{padding:10px 20px;border:none;border-radius:7px;font-family:'IBM Plex Sans',sans-serif;font-size:.83rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s;}
+    .btn-primary{background:var(--green);color:white;box-shadow:0 2px 8px rgba(10,92,54,.25);}
+    .btn-primary:hover{background:var(--green-mid);box-shadow:0 4px 14px rgba(10,92,54,.3);transform:translateY(-1px);}
+    .btn-secondary{background:white;color:var(--green);border:1.5px solid var(--border);}
+    .btn-secondary:hover{border-color:var(--green);background:var(--green-pale);}
+    .btn-danger{background:var(--danger);color:white;}
+    .btn-block{width:100%;justify-content:center;}
+    .btn:active{transform:translateY(0)!important;}
+
+    /* Messages */
+    .msg{padding:11px 14px;border-radius:8px;margin-top:12px;font-size:.82rem;display:none;align-items:center;gap:8px;}
+    .msg.show{display:flex;}
+    .msg.ok{background:#e6f7f0;border:1px solid #a8ddc3;color:#0a6641;}
+    .msg.err{background:#fde8e8;border:1px solid #f5a9a9;color:#b91c1c;}
+    .msg.info{background:var(--green-pale);border:1px solid var(--border);color:var(--green);}
+
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;animation:fadeIn .2s ease;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Table */
+    .data-table{width:100%;border-collapse:collapse;font-size:.8rem;}
+    .data-table th{padding:10px 14px;text-align:left;color:var(--text-muted);font-weight:600;border-bottom:2px solid var(--border);font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;background:var(--off-white);}
+    .data-table td{padding:11px 14px;border-bottom:1px solid var(--border);}
+    .data-table tr:hover td{background:var(--off-white);}
+    .data-table tr:last-child td{border-bottom:none;}
+
+    /* Toast */
+    #toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+    .toast{padding:11px 16px;border-radius:8px;font-size:.82rem;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.15);animation:slideIn .2s ease;max-width:300px;}
+    .toast.ok{background:var(--green);color:white;}
+    .toast.err{background:var(--danger);color:white;}
+    .toast.warn{background:var(--warning);color:white;}
+    @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+    .loading,.empty{text-align:center;padding:40px 20px;color:var(--text-muted);}
+    .loading i{font-size:22px;animation:spin 1s linear infinite;display:block;margin-bottom:10px;color:var(--green-light);}
+    @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+    .empty i{font-size:28px;display:block;margin-bottom:10px;opacity:.3;color:var(--green);}
+
+    .update-note{background:#fef9e7;border:1px solid #f5d87a;border-radius:8px;padding:12px 14px;font-size:.78rem;color:#7d5a00;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px;}
+    code{font-family:'IBM Plex Mono',monospace;font-size:.8em;background:rgba(0,0,0,.05);padding:2px 5px;border-radius:4px;}
+
+    .portal-footer{text-align:center;padding:18px;font-size:.68rem;color:var(--text-muted);border-top:1px solid var(--border);margin-top:16px;letter-spacing:.06em;}
+
+    @media(max-width:700px){
+      .login-deco{display:none;}
+      .login-form-panel{padding:30px 22px;}
+      .nav-tab span{display:none;}
+      .doc-grid{grid-template-columns:1fr 1fr;}
+    }
+  </style>
+</head>
+<body>
+
+<div class="gov-stripe">ISLAMIC REPUBLIC OF PAKISTAN &nbsp;·&nbsp; CITIZEN REGISTRATION & IDENTITY DATABASE AUTHORITY &nbsp;·&nbsp; CRIDA</div>
+
+<div class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="emblem">
+        <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" width="36" height="36">
+          <circle cx="27" cy="30" r="13" fill="white"/>
+          <circle cx="32" cy="30" r="10.5" fill="#0a5c36"/>
+          <polygon points="44,21 45.5,25.5 50,25.5 46.5,28.5 48,33 44,30 40,33 41.5,28.5 38,25.5 42.5,25.5" fill="white"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>CRIDA Citizen Portal</h1>
+        <p>Citizen Registration &amp; Identity Database Authority — Government of Pakistan</p>
+      </div>
+    </div>
+    <div id="header-user"></div>
+  </div>
+</div>
+
+<div class="portal">
+
+  <!-- LOGIN -->
+  <div id="screen-login" class="login-screen">
+    <div class="login-wrap">
+      <div class="login-deco">
+        <div class="deco-emblem">
+          <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" width="44" height="44">
+            <circle cx="27" cy="30" r="13" fill="white" opacity=".9"/>
+            <circle cx="32" cy="30" r="10.5" fill="#0a5c36"/>
+            <polygon points="44,21 45.5,25.5 50,25.5 46.5,28.5 48,33 44,30 40,33 41.5,28.5 38,25.5 42.5,25.5" fill="white" opacity=".9"/>
+          </svg>
+        </div>
+        <h2>Citizen<br>Self-Service</h2>
+        <div class="deco-divider"></div>
+        <p>Access your government records securely with your National Identity Number</p>
+        <ul class="deco-features">
+          <li><i class="fas fa-id-card"></i> View profile &amp; status</li>
+          <li><i class="fas fa-file-pdf"></i> Download certificates</li>
+          <li><i class="fas fa-bell"></i> Track applications</li>
+          <li><i class="fas fa-edit"></i> Request data updates</li>
+          <li><i class="fas fa-comment-dots"></i> File complaints</li>
+        </ul>
+      </div>
+      <div class="login-form-panel">
+        <h3>Identity Verification</h3>
+        <p class="subtitle">Enter your credentials to access your records</p>
+        <div class="form-group">
+          <label><i class="fas fa-id-card" style="margin-right:5px;opacity:.7"></i>National ID Number (13 digits)</label>
+          <input id="c-nid" type="text" maxlength="13" placeholder="1234567890123" autocomplete="off"
+                 oninput="this.value=this.value.replace(/\D/g,'')">
+        </div>
+        <div class="form-group">
+          <label><i class="fas fa-hashtag" style="margin-right:5px;opacity:.7"></i>Citizen ID</label>
+          <input id="c-cid" type="number" placeholder="e.g. 7" min="1">
+        </div>
+        <div id="login-msg" class="msg"></div>
+        <button onclick="citizenLogin()" class="btn btn-primary btn-block" style="margin-top:14px">
+          <i class="fas fa-unlock-alt"></i> Access My Records
+        </button>
+        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);text-align:center">
+          <p style="font-size:.73rem;color:var(--text-muted)">
+            Are you a CRIDA officer? <a href="index.html" style="color:var(--green);font-weight:600">Officer Login →</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PORTAL -->
+  <div id="screen-portal" style="display:none">
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchPanel('profile',this)"><i class="fas fa-user"></i> <span>My Profile</span></button>
+      <button class="nav-tab" onclick="switchPanel('applications',this)"><i class="fas fa-file-alt"></i> <span>Applications</span></button>
+      <button class="nav-tab" onclick="switchPanel('documents',this)"><i class="fas fa-file-pdf"></i> <span>Documents</span></button>
+      <button class="nav-tab" onclick="switchPanel('family',this)"><i class="fas fa-sitemap"></i> <span>Family</span></button>
+      <button class="nav-tab" onclick="switchPanel('notifications',this)"><i class="fas fa-bell"></i> <span>Alerts</span><span class="notif-dot" id="notif-dot"></span></button>
+      <button class="nav-tab" onclick="switchPanel('complaints',this)"><i class="fas fa-comment-dots"></i> <span>Complaints</span></button>
+      <button class="nav-tab" onclick="switchPanel('updates',this)"><i class="fas fa-edit"></i> <span>Update Info</span></button>
+    </div>
+
+    <!-- PROFILE -->
+    <div id="panel-profile" class="tab-panel active">
+      <div id="profile-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading your profile…</div></div>
+    </div>
+
+    <!-- APPLICATIONS -->
+    <div id="panel-applications" class="tab-panel">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><i class="fas fa-file-alt"></i></div>
+          <h2>My Applications</h2>
+          <button onclick="loadApplications()" class="btn btn-secondary" style="margin-left:auto;padding:5px 11px;font-size:.76rem"><i class="fas fa-sync"></i> Refresh</button>
+        </div>
+        <div id="apps-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- DOCUMENTS -->
+    <div id="panel-documents" class="tab-panel">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><i class="fas fa-file-pdf"></i></div>
+          <h2>Download Official Documents</h2>
+        </div>
+        <p style="font-size:.78rem;color:var(--text-muted);margin-bottom:18px">Click any document below to generate and download an official copy.</p>
+        <div class="doc-grid" id="doc-grid"></div>
+        <div id="doc-msg" class="msg"></div>
+      </div>
+    </div>
+
+    <!-- FAMILY -->
+    <div id="panel-family" class="tab-panel">
+      <div class="card">
+        <div class="card-header"><div class="card-icon"><i class="fas fa-sitemap"></i></div><h2>Family Tree</h2></div>
+        <div id="family-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div id="panel-notifications" class="tab-panel">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><i class="fas fa-bell"></i></div><h2>My Notifications</h2>
+          <button onclick="loadNotifications()" class="btn btn-secondary" style="margin-left:auto;padding:5px 11px;font-size:.76rem"><i class="fas fa-sync"></i> Refresh</button>
+        </div>
+        <div id="notif-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- COMPLAINTS -->
+    <div id="panel-complaints" class="tab-panel">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header"><div class="card-icon"><i class="fas fa-comment-dots"></i></div><h2>Submit a Complaint</h2></div>
+        <div class="form-group"><label>Subject</label><input id="comp-subject" placeholder="Brief description of your issue"></div>
+        <div class="form-group"><label>Full Description</label><textarea id="comp-desc" rows="4" placeholder="Provide complete details…"></textarea></div>
+        <button onclick="submitComplaint()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Complaint</button>
+        <div id="comp-msg" class="msg"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><i class="fas fa-list"></i></div><h2>My Complaints</h2>
+          <button onclick="loadMyComplaints()" class="btn btn-secondary" style="margin-left:auto;padding:5px 11px;font-size:.76rem"><i class="fas fa-sync"></i> Refresh</button>
+        </div>
+        <div id="complaints-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- UPDATE REQUESTS -->
+    <div id="panel-updates" class="tab-panel">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header"><div class="card-icon"><i class="fas fa-edit"></i></div><h2>Request Information Update</h2></div>
+        <div class="update-note"><i class="fas fa-info-circle"></i><span>Requests are reviewed by a Registrar officer before being applied. Processing takes 2–5 working days.</span></div>
+        <div class="form-group">
+          <label>Field to Update</label>
+          <select id="upd-field">
+            <option value="first_name">First Name</option>
+            <option value="last_name">Last Name</option>
+            <option value="marital_status">Marital Status</option>
+            <option value="blood_group">Blood Group</option>
+            <option value="address">Address</option>
+          </select>
+        </div>
+        <div class="form-group"><label>New Value</label><input id="upd-value" placeholder="Enter the corrected value"></div>
+        <div class="form-group"><label>Reason</label><input id="upd-reason" placeholder="e.g. Spelling error, recently married"></div>
+        <button onclick="submitUpdateRequest()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Request</button>
+        <div id="upd-msg" class="msg"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><i class="fas fa-clock"></i></div><h2>My Update Requests</h2>
+          <button onclick="loadMyUpdateRequests()" class="btn btn-secondary" style="margin-left:auto;padding:5px 11px;font-size:.76rem"><i class="fas fa-sync"></i> Refresh</button>
+        </div>
+        <div id="updates-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
+      </div>
+    </div>
+
+  </div><!-- end portal -->
+
+  <div class="portal-footer">CRIDA &nbsp;·&nbsp; Citizen Registration &amp; Identity Database Authority &nbsp;·&nbsp; Government of Pakistan</div>
+</div>
+
+<div id="toast-container"></div>
+<script src="citizen.js"></script>
+</body>
+</html>
