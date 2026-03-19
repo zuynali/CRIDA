@@ -20,11 +20,15 @@
     *{box-sizing:border-box;margin:0;padding:0;}
     body{background:var(--off-white);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:14px;min-height:100vh;position:relative;}
 
-    /* Markhor watermark */
+    /* Markhor watermark — real image, tinted green, tiled */
     body::before{
       content:'';position:fixed;inset:0;
-      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 280'%3E%3Cg fill='%230a5c36' opacity='0.04'%3E%3Cellipse cx='100' cy='170' rx='38' ry='50'/%3E%3Cellipse cx='100' cy='110' rx='16' ry='26' transform='rotate(-8 100 110)'/%3E%3Cellipse cx='106' cy='82' rx='18' ry='14' transform='rotate(-15 106 82)'/%3E%3Cellipse cx='118' cy='88' rx='10' ry='7' transform='rotate(-10 118 88)'/%3E%3Cellipse cx='122' cy='98' rx='5' ry='10' transform='rotate(15 122 98)'/%3E%3Cellipse cx='90' cy='62' rx='5' ry='18' transform='rotate(-35 90 62)'/%3E%3Cellipse cx='75' cy='44' rx='4' ry='14' transform='rotate(-55 75 44)'/%3E%3Cellipse cx='65' cy='30' rx='3' ry='10' transform='rotate(-70 65 30)'/%3E%3Cellipse cx='60' cy='20' rx='2' ry='7' transform='rotate(-80 60 20)'/%3E%3Cellipse cx='115' cy='60' rx='5' ry='18' transform='rotate(20 115 60)'/%3E%3Cellipse cx='130' cy='42' rx='4' ry='14' transform='rotate(40 130 42)'/%3E%3Cellipse cx='140' cy='28' rx='3' ry='10' transform='rotate(55 140 28)'/%3E%3Cellipse cx='144' cy='18' rx='2' ry='7' transform='rotate(65 144 18)'/%3E%3Crect x='82' y='210' width='12' height='50' rx='5' transform='rotate(-5 82 210)'/%3E%3Crect x='100' y='212' width='12' height='48' rx='5' transform='rotate(5 100 212)'/%3E%3Crect x='70' y='208' width='11' height='52' rx='5' transform='rotate(-12 70 208)'/%3E%3Crect x='116' y='208' width='11' height='52' rx='5' transform='rotate(8 116 208)'/%3E%3Cellipse cx='68' cy='155' rx='5' ry='15' transform='rotate(40 68 155)'/%3E%3Ccircle cx='113' cy='78' r='3'/%3E%3C/g%3E%3C/svg%3E");
-      background-size:320px 450px;background-position:center;background-repeat:repeat;
+      background-image:url("/markhor.jpeg");
+      background-size:260px auto;
+      background-repeat:repeat;
+      background-position:center;
+      opacity:0.045;
+      filter:invert(30%) sepia(80%) saturate(400%) hue-rotate(100deg);
       pointer-events:none;z-index:0;
     }
 
@@ -45,9 +49,11 @@
     .login-screen{min-height:calc(100vh - 120px);display:flex;align-items:center;justify-content:center;padding:40px 20px;}
     .login-wrap{display:flex;max-width:820px;width:100%;box-shadow:var(--shadow-lg);border-radius:16px;overflow:hidden;}
     .login-deco{background:var(--green);width:300px;flex-shrink:0;padding:44px 32px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;}
-    .login-deco::after{content:'';position:absolute;bottom:-40px;right:-40px;width:200px;height:260px;
-      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 280'%3E%3Cg fill='white' opacity='0.1'%3E%3Cellipse cx='100' cy='170' rx='38' ry='50'/%3E%3Cellipse cx='100' cy='110' rx='16' ry='26' transform='rotate(-8 100 110)'/%3E%3Cellipse cx='106' cy='82' rx='18' ry='14' transform='rotate(-15 106 82)'/%3E%3Cellipse cx='118' cy='88' rx='10' ry='7' transform='rotate(-10 118 88)'/%3E%3Cellipse cx='90' cy='62' rx='5' ry='18' transform='rotate(-35 90 62)'/%3E%3Cellipse cx='75' cy='44' rx='4' ry='14' transform='rotate(-55 75 44)'/%3E%3Cellipse cx='65' cy='30' rx='3' ry='10' transform='rotate(-70 65 30)'/%3E%3Cellipse cx='115' cy='60' rx='5' ry='18' transform='rotate(20 115 60)'/%3E%3Cellipse cx='130' cy='42' rx='4' ry='14' transform='rotate(40 130 42)'/%3E%3Cellipse cx='140' cy='28' rx='3' ry='10' transform='rotate(55 140 28)'/%3E%3Crect x='82' y='210' width='12' height='50' rx='5' transform='rotate(-5 82 210)'/%3E%3Crect x='100' y='212' width='12' height='48' rx='5' transform='rotate(5 100 212)'/%3E%3C/g%3E%3C/svg%3E");
-      background-size:contain;background-repeat:no-repeat;pointer-events:none;}
+    .login-deco::after{content:'';position:absolute;bottom:-20px;right:-20px;width:200px;height:260px;
+      background-image:url("/markhor.jpeg");
+      background-size:contain;background-repeat:no-repeat;background-position:center bottom;
+      opacity:0.15;filter:brightness(0) invert(1);
+      pointer-events:none;}
     .login-deco .deco-emblem{width:72px;height:72px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:18px;border:2px solid rgba(255,255,255,.25);}
     .login-deco h2{font-family:'Playfair Display',serif;font-size:1.4rem;color:white;margin-bottom:8px;}
     .login-deco p{color:rgba(255,255,255,.7);font-size:.78rem;line-height:1.6;}

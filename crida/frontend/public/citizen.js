@@ -84,7 +84,10 @@ async function citizenLogin() {
   if (r.ok) {
     TOKEN      = r.data.token;
     CITIZEN_ID = r.data.citizen.citizen_id;
-    CITIZEN    = r.data.citizen;
+    CITIZEN    = {
+      ...r.data.citizen,
+      full_name: `${r.data.citizen.first_name} ${r.data.citizen.last_name}`.trim()
+    };
     sessionStorage.setItem("crida_citizen_token", TOKEN);
     sessionStorage.setItem("crida_citizen_id", CITIZEN_ID);
 
@@ -101,7 +104,7 @@ function showPortal() {
   document.getElementById("header-user").innerHTML = `
     <div class="user-pill">
       <div class="dot"></div>
-      <span>${CITIZEN?.first_name || ""} ${CITIZEN?.last_name || ""}</span>
+      <span>${CITIZEN?.full_name || ((CITIZEN?.first_name||"") + " " + (CITIZEN?.last_name||"")).trim() || "Citizen"}</span>
     </div>
     <button onclick="citizenLogout()" class="btn btn-secondary" style="padding:6px 12px;font-size:.76rem">
       <i class="fas fa-sign-out-alt"></i> Logout
@@ -128,7 +131,15 @@ window.addEventListener("load", async () => {
     const r = await req("GET", `/citizens/${CITIZEN_ID}`);
     if (r.ok) {
       const c = r.data.citizen || r.data;
-      CITIZEN = { first_name: c.first_name, last_name: c.last_name, citizen_id: c.citizen_id };
+      // Normalize — CitizenProfile_View returns full_name, citizen-login returns first/last
+      const fullName = c.full_name || `${c.first_name || ""} ${c.last_name || ""}`.trim();
+      const parts    = fullName.split(" ");
+      CITIZEN = {
+        first_name:  c.first_name  || parts[0] || "Citizen",
+        last_name:   c.last_name   || parts.slice(1).join(" ") || "",
+        full_name:   fullName,
+        citizen_id:  c.citizen_id
+      };
       showPortal();
     } else {
       sessionStorage.clear();
@@ -257,7 +268,22 @@ function renderDocButtons() {
 async function downloadPDF(path, label) {
   showMsg("doc-msg", `Generating ${label}…`, "info");
   try {
-    const blob = await req("GET", `/pdf/${path}`, null, true);
+    // Use fetch directly so we can inspect status before treating as blob
+    const res = await fetch(`${API}/pdf/${path}`, {
+      headers: { "Authorization": "Bearer " + TOKEN }
+    });
+    if (res.status === 403) {
+      showMsg("doc-msg",
+        `Permission denied. Ask a Registrar officer to download your ${label} on your behalf, or visit your nearest CRIDA office.`,
+        "err");
+      return;
+    }
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      showMsg("doc-msg", `Could not generate ${label}: ${errData.error || res.status}`, "err");
+      return;
+    }
+    const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href = url; a.download = `${path.replace("/","_")}.pdf`; a.click();
@@ -279,31 +305,111 @@ async function loadFamilyTree() {
     return;
   }
 
-  const data = r.data;
-  const root = data.citizen;
-  const rels  = [...(data.relationships || []), ...(data.reverse_relations || [])];
+  const data  = r.data;
+  const root  = data.citizen;
+  const allRels = [...(data.relationships || []), ...(data.reverse_relations || [])];
   const seen  = new Set();
-  const members = [];
-  rels.forEach(rel => { if (!seen.has(rel.citizen_id)) { seen.add(rel.citizen_id); members.push(rel); } });
+  const parents = [], children = [], siblings = [], others = [];
 
-  if (!members.length && !data.spouse) {
-    div.innerHTML = `<div class="empty"><i class="fas fa-sitemap"></i>No family relationships on record.</div>`;
-    return;
-  }
-
-  let rows = "";
-  if (data.spouse) {
-    const rel = root.gender === "Male" ? "Wife" : "Husband";
-    rows += `<tr><td>${data.spouse.spouse_name}</td><td><span class="badge badge-info">${rel}</span></td><td><code>${data.spouse.spouse_id}</code></td></tr>`;
-  }
-  members.forEach(m => {
-    rows += `<tr><td>${m.full_name || "—"}</td><td><span class="badge badge-info">${m.relationship_type}</span></td><td><code>${m.citizen_id}</code></td></tr>`;
+  allRels.forEach(rel => {
+    if (seen.has(rel.citizen_id)) return;
+    seen.add(rel.citizen_id);
+    const rt = rel.relationship_type;
+    if (['Father','Mother','Grandfather','Grandmother'].includes(rt))           parents.push(rel);
+    else if (['Son','Daughter','Child','Grandson','Granddaughter'].includes(rt)) children.push(rel);
+    else if (['Brother','Sister','Sibling'].includes(rt))                        siblings.push(rel);
+    else if (!['Husband','Wife','Spouse'].includes(rt))                          others.push(rel);
   });
 
-  div.innerHTML = `<table class="data-table">
-    <thead><tr><th>Name</th><th>Relationship</th><th>Citizen ID</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+  const spouse = data.spouse;
+  const spouseRel = spouse ? (root.gender === 'Male' ? 'Wife' : 'Husband') : null;
+
+  const node = (name, rel, isRoot = false, cid = null) => `
+    <div class="ft-node ${isRoot ? 'ft-root' : ''}">
+      <div class="ft-avatar">${(name || '?').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}</div>
+      <div class="ft-name">${name || '—'}</div>
+      ${rel ? `<div class="ft-rel">${rel}</div>` : ''}
+      ${cid ? `<div class="ft-cid">#${cid}</div>` : ''}
+    </div>`;
+
+  const nodeGroup = (items, label) => items.length ? `
+    <div class="ft-group">
+      <div class="ft-group-label">${label}</div>
+      <div class="ft-group-nodes">${items.map(m => node(m.full_name, m.relationship_type, false, m.citizen_id)).join('')}</div>
+    </div>` : '';
+
+  div.innerHTML = `
+    <div class="ft-tree-wrap">
+      <style>
+        .ft-tree-wrap{font-family:'IBM Plex Sans',sans-serif;padding:8px 0;}
+        .ft-level{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin:0 0 0;}
+        .ft-connector{display:flex;justify-content:center;align-items:center;height:36px;position:relative;}
+        .ft-connector::before{content:'';position:absolute;top:0;left:50%;width:2px;height:100%;background:var(--border-dark);}
+        .ft-h-line{height:2px;background:var(--border-dark);flex:1;}
+        .ft-node{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:default;}
+        .ft-node.ft-root .ft-avatar{background:var(--green);border:3px solid var(--green-light);box-shadow:0 0 0 4px rgba(10,92,54,.15);}
+        .ft-avatar{width:52px;height:52px;border-radius:50%;background:var(--text-mid);color:white;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;font-family:'Playfair Display',serif;border:2px solid var(--border-dark);}
+        .ft-name{font-size:.75rem;font-weight:600;text-align:center;max-width:80px;color:var(--text);}
+        .ft-rel{font-size:.65rem;color:var(--text-muted);text-align:center;background:var(--green-pale);padding:1px 6px;border-radius:10px;color:var(--green);}
+        .ft-cid{font-size:.62rem;color:var(--text-muted);font-family:'IBM Plex Mono',monospace;}
+        .ft-group{display:flex;flex-direction:column;align-items:center;gap:6px;}
+        .ft-group-label{font-size:.65rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;}
+        .ft-group-nodes{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+        .ft-middle-row{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;margin:12px 0;}
+        .ft-spouse-line{width:40px;height:2px;background:var(--gold);}
+        .ft-section{margin:8px 0;}
+        .ft-section-title{text-align:center;font-size:.65rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}
+      </style>
+
+      ${parents.length ? `
+        <div class="ft-section">
+          <div class="ft-section-title"><i class="fas fa-arrow-up" style="margin-right:4px"></i>Parents</div>
+          <div class="ft-level">${parents.map(m => node(m.full_name, m.relationship_type, false, m.citizen_id)).join('')}</div>
+        </div>
+        <div class="ft-connector"></div>
+      ` : ''}
+
+      <div class="ft-middle-row">
+        ${siblings.length ? `
+          <div class="ft-group">
+            <div class="ft-group-label">Siblings</div>
+            <div class="ft-group-nodes">${siblings.map(m => node(m.full_name, m.relationship_type, false, m.citizen_id)).join('')}</div>
+          </div>
+          <div style="width:30px;height:2px;background:var(--border-dark)"></div>
+        ` : ''}
+
+        ${node(root.full_name || (root.first_name + ' ' + root.last_name), 'You', true, root.citizen_id)}
+
+        ${spouse ? `
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="ft-spouse-line"></div>
+            <div class="ft-group">
+              <div class="ft-group-label">${spouseRel}</div>
+              ${node(spouse.spouse_name, spouseRel, false, spouse.spouse_id)}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+
+      ${children.length ? `
+        <div class="ft-connector"></div>
+        <div class="ft-section">
+          <div class="ft-section-title"><i class="fas fa-arrow-down" style="margin-right:4px"></i>Children</div>
+          <div class="ft-level">${children.map(m => node(m.full_name, m.relationship_type, false, m.citizen_id)).join('')}</div>
+        </div>
+      ` : ''}
+
+      ${others.length ? `
+        <div class="ft-section" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <div class="ft-section-title">Other Relations</div>
+          <div class="ft-level">${others.map(m => node(m.full_name, m.relationship_type, false, m.citizen_id)).join('')}</div>
+        </div>
+      ` : ''}
+
+      ${!parents.length && !children.length && !siblings.length && !spouse && !others.length ? `
+        <div class="empty"><i class="fas fa-sitemap"></i>No family relationships on record.</div>
+      ` : ''}
+    </div>`;
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────────────
