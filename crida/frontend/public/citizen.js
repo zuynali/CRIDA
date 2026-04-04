@@ -102,6 +102,7 @@ function showPortal() {
   document.getElementById("screen-login").style.display  = "none";
   document.getElementById("screen-portal").style.display = "block";
   document.getElementById("header-user").innerHTML = `
+    <a href="Landing.html" style="font-size:.75rem;color:var(--text-muted);text-decoration:none;display:flex;align-items:center;gap:5px;margin-right:8px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;transition:all .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'"><i class='fas fa-home'></i> Home</a>
     <div class="user-pill">
       <div class="dot"></div>
       <span>${CITIZEN?.full_name || ((CITIZEN?.first_name||"") + " " + (CITIZEN?.last_name||"")).trim() || "Citizen"}</span>
@@ -158,7 +159,16 @@ async function loadProfile() {
     return;
   }
 
-  const c = r.data.citizen || r.data;
+  const raw = r.data.citizen || r.data;
+  // Normalise name fields — API may return full_name only
+  const fullName = raw.full_name || `${raw.first_name || ""} ${raw.last_name || ""}`.trim() || "Citizen";
+  const nameParts = fullName.split(" ");
+  const c = {
+    ...raw,
+    first_name: raw.first_name || nameParts[0] || "Citizen",
+    last_name:  raw.last_name  || nameParts.slice(1).join(" ") || "",
+    full_name:  fullName
+  };
   const initials = (c.first_name?.[0] || "") + (c.last_name?.[0] || "");
   const statusBadge = c.status === "active"
     ? `<span class="badge badge-success"><i class="fas fa-check-circle" style="margin-right:3px"></i>Active</span>`
@@ -182,7 +192,7 @@ async function loadProfile() {
       </div>
 
       <div class="profile-grid">
-        ${pf("Date of Birth",    c.dob ? String(c.dob).substring(0,10) : "—")}
+        ${pf("Date of Birth",    c.dob ? (() => { try { const d = new Date(c.dob); return isNaN(d) ? String(c.dob).substring(0,10) : d.toLocaleDateString('en-PK',{day:'2-digit',month:'short',year:'numeric'}); } catch(e){ return String(c.dob).substring(0,10); }})() : "—")}
         ${pf("Age",              c.age ?? "—")}
         ${pf("Gender",           c.gender || "—")}
         ${pf("Marital Status",   c.marital_status || "—")}
