@@ -1,488 +1,1510 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CRIDA — Phase 2 Test Harness</title>
-  <link rel="stylesheet" href="style.css">
+  <title>CRIDA — Citizen Registration & Identity Database Authority</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-</head>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --green-deep:   #0b4d2e;
+      --green-mid:    #0d6e40;
+      --green-bright: #16a365;
+      --green-glow:   #1db96c;
+      --white-pure:   #ffffff;
+      --white-off:    #f5f9f6;
+      --gold:         #c8962a;
+      --gold-light:   #e8b84b;
+      --text-dark:    #0a1f12;
+      --text-mid:     #2a5c3f;
+      --text-muted:   #6b9c80;
+      --border:       rgba(13,110,64,0.18);
+    }
 
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--white-pure);
+      color: var(--text-dark);
+      overflow-x: hidden;
+    }
+
+    /* ── GOVT STRIPE ── */
+    .gov-stripe {
+      background: var(--green-deep);
+      color: rgba(255,255,255,0.85);
+      text-align: center;
+      padding: 7px 20px;
+      font-size: 0.67rem;
+      letter-spacing: 0.18em;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    /* ── NAVBAR ── */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 24px rgba(11,77,46,0.07);
+    }
+
+    .nav-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 28px;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      text-decoration: none;
+    }
+
+    .nav-emblem {
+      width: 46px;
+      height: 46px;
+      background: var(--green-deep);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nav-brand-text h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      line-height: 1.1;
+    }
+
+    .nav-brand-text p {
+      font-size: 0.62rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      margin-top: 1px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 30px;
+    }
+
+    .nav-links a {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-mid);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--green-bright); }
+
+    .nav-cta {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-nav-outline {
+      padding: 9px 20px;
+      border: 1.5px solid var(--green-mid);
+      border-radius: 6px;
+      color: var(--green-mid);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-nav-outline:hover {
+      background: var(--green-deep);
+      border-color: var(--green-deep);
+      color: white;
+    }
+
+    .btn-nav-solid {
+      padding: 9px 20px;
+      background: var(--green-deep);
+      border: 1.5px solid var(--green-deep);
+      border-radius: 6px;
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-nav-solid:hover {
+      background: var(--green-mid);
+      border-color: var(--green-mid);
+      box-shadow: 0 4px 14px rgba(13,110,64,0.3);
+      transform: translateY(-1px);
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 92vh;
+      display: flex;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(160deg, #f2f8f4 0%, #eaf4ee 50%, #dff0e6 100%);
+    }
+
+    /* Pakistani flag crescent + star watermark */
+    .hero-bg-art {
+      position: absolute;
+      right: -80px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 720px;
+      height: 720px;
+      opacity: 0.055;
+      pointer-events: none;
+    }
+
+    /* Animated ring */
+    .hero-ring {
+      position: absolute;
+      right: 60px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 580px;
+      height: 580px;
+      border-radius: 50%;
+      border: 1px solid rgba(13,110,64,0.12);
+      pointer-events: none;
+      animation: ringPulse 4s ease-in-out infinite;
+    }
+
+    .hero-ring::before {
+      content: '';
+      position: absolute;
+      inset: 30px;
+      border-radius: 50%;
+      border: 1px solid rgba(13,110,64,0.09);
+    }
+
+    .hero-ring::after {
+      content: '';
+      position: absolute;
+      inset: 60px;
+      border-radius: 50%;
+      border: 1px solid rgba(13,110,64,0.06);
+    }
+
+    @keyframes ringPulse {
+      0%, 100% { transform: translateY(-50%) scale(1); opacity: 1; }
+      50%       { transform: translateY(-50%) scale(1.02); opacity: 0.7; }
+    }
+
+    /* Green blob */
+    .hero-blob {
+      position: absolute;
+      right: -100px;
+      top: 50%;
+      transform: translateY(-55%);
+      width: 640px;
+      height: 640px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(22,163,101,0.13) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 80px 28px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+
+    .hero-left {}
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(11,77,46,0.08);
+      border: 1px solid rgba(11,77,46,0.16);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--green-mid);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 22px;
+    }
+
+    .hero-badge i {
+      font-size: 0.65rem;
+    }
+
+    .hero-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2.6rem, 5vw, 4.2rem);
+      font-weight: 700;
+      line-height: 1.08;
+      color: var(--green-deep);
+      margin-bottom: 14px;
+    }
+
+    .hero-title em {
+      font-style: italic;
+      color: var(--green-bright);
+    }
+
+    .hero-sub {
+      font-size: 1.05rem;
+      color: var(--text-mid);
+      line-height: 1.7;
+      max-width: 480px;
+      margin-bottom: 36px;
+      font-weight: 300;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+
+    .btn-hero-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 15px 30px;
+      background: var(--green-deep);
+      color: white;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.22s;
+      box-shadow: 0 4px 20px rgba(11,77,46,0.28);
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-hero-primary:hover {
+      background: var(--green-mid);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(11,77,46,0.35);
+    }
+
+    .btn-hero-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 15px 30px;
+      background: transparent;
+      color: var(--green-deep);
+      border: 1.5px solid rgba(11,77,46,0.3);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.22s;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-hero-secondary:hover {
+      border-color: var(--green-mid);
+      background: rgba(11,77,46,0.04);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 32px;
+    }
+
+    .hero-stat {}
+
+    .hero-stat .num {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      line-height: 1;
+    }
+
+    .hero-stat .lbl {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+      font-weight: 500;
+    }
+
+    .stat-divider {
+      width: 1px;
+      background: var(--border);
+      align-self: stretch;
+    }
+
+    /* Hero visual card */
+    .hero-right {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .hero-card-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .hero-card-bg {
+      position: absolute;
+      inset: -20px;
+      background: linear-gradient(135deg, rgba(11,77,46,0.06), rgba(22,163,101,0.04));
+      border-radius: 30px;
+      border: 1px solid rgba(11,77,46,0.1);
+    }
+
+    .hero-card {
+      position: relative;
+      background: white;
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 20px 60px rgba(11,77,46,0.14), 0 4px 16px rgba(0,0,0,0.06);
+      border: 1px solid rgba(11,77,46,0.08);
+    }
+
+    .hc-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #f0f7f3;
+    }
+
+    .hc-emblem {
+      width: 44px;
+      height: 44px;
+      background: var(--green-deep);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hc-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--green-deep);
+    }
+
+    .hc-sub {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .hc-service-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .hc-service {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #f5faf7;
+      border-radius: 10px;
+      border: 1px solid #e0efe7;
+      transition: all 0.2s;
+    }
+
+    .hc-service:hover {
+      background: #edf7f1;
+      border-color: rgba(13,110,64,0.2);
+      transform: translateX(4px);
+    }
+
+    .hc-service-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--green-deep);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .hc-service-text strong {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+
+    .hc-service-text span {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .hc-service-arrow {
+      margin-left: auto;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .card-float-badge {
+      position: absolute;
+      top: -14px;
+      right: 20px;
+      background: var(--gold);
+      color: white;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      box-shadow: 0 4px 12px rgba(200,150,42,0.4);
+    }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 0;
+    }
+
+    /* ── WHAT IS CRIDA ── */
+    .about-section {
+      background: var(--white-off);
+      padding: 100px 28px;
+    }
+
+    .section-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-eyebrow {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--green-bright);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 700;
+      color: var(--green-deep);
+      line-height: 1.15;
+      margin-bottom: 14px;
+    }
+
+    .section-desc {
+      font-size: 1rem;
+      color: var(--text-mid);
+      max-width: 580px;
+      margin: 0 auto;
+      line-height: 1.7;
+      font-weight: 300;
+    }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 50px;
+      align-items: center;
+    }
+
+    .about-text p {
+      font-size: 0.95rem;
+      color: var(--text-mid);
+      line-height: 1.8;
+      margin-bottom: 18px;
+      font-weight: 300;
+    }
+
+    .about-text p strong {
+      color: var(--green-deep);
+      font-weight: 600;
+    }
+
+    .about-visual {
+      position: relative;
+    }
+
+    .about-card-stack {
+      position: relative;
+      height: 360px;
+    }
+
+    .acard {
+      position: absolute;
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 30px rgba(11,77,46,0.1);
+      border: 1px solid rgba(11,77,46,0.08);
+    }
+
+    .acard-1 {
+      top: 0;
+      left: 20px;
+      right: 60px;
+      animation: float1 5s ease-in-out infinite;
+    }
+
+    .acard-2 {
+      bottom: 0;
+      right: 0;
+      left: 60px;
+      animation: float2 5s ease-in-out infinite;
+    }
+
+    @keyframes float1 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+    @keyframes float2 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(10px)} }
+
+    .acard-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--green-deep);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    .acard h4 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      margin-bottom: 6px;
+    }
+
+    .acard p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ── SERVICES ── */
+    .services-section {
+      padding: 100px 28px;
+      background: white;
+    }
+
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .service-card {
+      background: #f7fbf8;
+      border: 1px solid rgba(11,77,46,0.1);
+      border-radius: 16px;
+      padding: 30px 24px;
+      transition: all 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .service-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--green-deep), var(--green-bright));
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s;
+    }
+
+    .service-card:hover {
+      border-color: rgba(11,77,46,0.22);
+      box-shadow: 0 12px 36px rgba(11,77,46,0.1);
+      transform: translateY(-4px);
+    }
+
+    .service-card:hover::before { transform: scaleX(1); }
+
+    .sc-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      background: var(--green-deep);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin-bottom: 18px;
+    }
+
+    .sc-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      margin-bottom: 10px;
+    }
+
+    .sc-desc {
+      font-size: 0.82rem;
+      color: var(--text-mid);
+      line-height: 1.65;
+      font-weight: 300;
+    }
+
+    /* ── OFFICES ── */
+    .offices-section {
+      padding: 100px 28px;
+      background: var(--green-deep);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .offices-section::before {
+      content: '';
+      position: absolute;
+      top: -200px;
+      right: -200px;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.03);
+      pointer-events: none;
+    }
+
+    .offices-section .section-eyebrow { color: var(--gold-light); }
+    .offices-section .section-title   { color: white; }
+    .offices-section .section-desc    { color: rgba(255,255,255,0.6); }
+
+    .offices-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+
+    .office-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 24px 20px;
+      transition: all 0.22s;
+    }
+
+    .office-card:hover {
+      background: rgba(255,255,255,0.09);
+      border-color: rgba(255,255,255,0.2);
+      transform: translateY(-3px);
+    }
+
+    .oc-city {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 4px;
+    }
+
+    .oc-province {
+      font-size: 0.68rem;
+      color: var(--gold-light);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .oc-detail {
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.6;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .oc-detail i {
+      color: rgba(255,255,255,0.35);
+      width: 12px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .oc-hours {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.45);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how-section {
+      padding: 100px 28px;
+      background: var(--white-off);
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      position: relative;
+    }
+
+    .steps-grid::before {
+      content: '';
+      position: absolute;
+      top: 32px;
+      left: 10%;
+      right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), var(--border), transparent);
+    }
+
+    .step-card {
+      padding: 0 20px;
+      text-align: center;
+      position: relative;
+    }
+
+    .step-num {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid rgba(11,77,46,0.15);
+      color: var(--green-deep);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      position: relative;
+      z-index: 2;
+      box-shadow: 0 4px 14px rgba(11,77,46,0.1);
+      transition: all 0.3s;
+    }
+
+    .step-card:hover .step-num {
+      background: var(--green-deep);
+      color: white;
+      border-color: var(--green-deep);
+    }
+
+    .step-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--green-deep);
+      margin-bottom: 10px;
+    }
+
+    .step-desc {
+      font-size: 0.8rem;
+      color: var(--text-mid);
+      line-height: 1.65;
+      font-weight: 300;
+    }
+
+    /* ── CTA BANNER ── */
+    .cta-section {
+      padding: 80px 28px;
+      background: linear-gradient(135deg, var(--green-deep) 0%, #0d6e40 100%);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-section::after {
+      content: '';
+      position: absolute;
+      bottom: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 300px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.04);
+      pointer-events: none;
+    }
+
+    .cta-section h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      color: white;
+      margin-bottom: 14px;
+    }
+
+    .cta-section p {
+      font-size: 1rem;
+      color: rgba(255,255,255,0.65);
+      max-width: 500px;
+      margin: 0 auto 36px;
+      font-weight: 300;
+    }
+
+    .cta-actions {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-cta-white {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 15px 32px;
+      background: white;
+      color: var(--green-deep);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.22s;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-cta-white:hover {
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      transform: translateY(-2px);
+    }
+
+    .btn-cta-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 15px 32px;
+      background: transparent;
+      color: white;
+      border: 1.5px solid rgba(255,255,255,0.4);
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.22s;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .btn-cta-outline:hover {
+      border-color: rgba(255,255,255,0.7);
+      background: rgba(255,255,255,0.07);
+    }
+
+    /* ── FOOTER ── */
+    .footer {
+      background: #08321e;
+      padding: 60px 28px 30px;
+    }
+
+    .footer-inner {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .footer-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 50px;
+      margin-bottom: 50px;
+    }
+
+    .footer-brand h3 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 6px;
+    }
+
+    .footer-brand p {
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.4);
+      line-height: 1.7;
+      margin-top: 10px;
+    }
+
+    .footer-col h4 {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 16px;
+    }
+
+    .footer-col a {
+      display: block;
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.6);
+      text-decoration: none;
+      margin-bottom: 10px;
+      transition: color 0.2s;
+    }
+
+    .footer-col a:hover { color: var(--gold-light); }
+
+    .footer-bottom {
+      padding-top: 24px;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .footer-bottom p {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.04em;
+    }
+
+    .footer-flag {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.35);
+    }
+
+    /* pk flag mini */
+    .pk-flag {
+      width: 28px;
+      height: 18px;
+      border-radius: 2px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .pk-flag .white-stripe {
+      width: 30%;
+      background: white;
+    }
+
+    .pk-flag .green-stripe {
+      flex: 1;
+      background: var(--green-mid);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── ANIMATIONS ── */
+    .fade-up {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .fade-up:nth-child(1) { transition-delay: 0.0s; }
+    .fade-up:nth-child(2) { transition-delay: 0.1s; }
+    .fade-up:nth-child(3) { transition-delay: 0.2s; }
+    .fade-up:nth-child(4) { transition-delay: 0.3s; }
+    .fade-up:nth-child(5) { transition-delay: 0.4s; }
+    .fade-up:nth-child(6) { transition-delay: 0.5s; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .hero-content { grid-template-columns: 1fr; gap: 40px; }
+      .hero-right { display: none; }
+      .about-grid { grid-template-columns: 1fr; }
+      .about-visual { display: none; }
+      .services-grid { grid-template-columns: 1fr 1fr; }
+      .offices-grid { grid-template-columns: 1fr 1fr; }
+      .steps-grid { grid-template-columns: 1fr 1fr; gap: 30px; }
+      .steps-grid::before { display: none; }
+      .footer-top { grid-template-columns: 1fr 1fr; gap: 30px; }
+      .nav-links { display: none; }
+    }
+
+    @media (max-width: 600px) {
+      .services-grid { grid-template-columns: 1fr; }
+      .offices-grid { grid-template-columns: 1fr; }
+      .steps-grid { grid-template-columns: 1fr; }
+      .footer-top { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
 <body>
 
-  <div class="sidebar">
-    <div class="logo">
-      <i class="fas fa-shield-halved"></i>
-      <span>CRIDA</span>
+<!-- GOVT STRIPE -->
+<div class="gov-stripe">
+  ISLAMIC REPUBLIC OF PAKISTAN &nbsp;·&nbsp; CITIZEN REGISTRATION &amp; IDENTITY DATABASE AUTHORITY &nbsp;·&nbsp; ESTABLISHED 2020
+</div>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="#" class="nav-brand">
+      <div class="nav-emblem">
+        <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
+          <circle cx="27" cy="30" r="13" fill="white"/>
+          <circle cx="32" cy="30" r="10.5" fill="#0b4d2e"/>
+          <polygon points="44,21 45.5,25.5 50,25.5 46.5,28.5 48,33 44,30 40,33 41.5,28.5 38,25.5 42.5,25.5" fill="white"/>
+        </svg>
+      </div>
+      <div class="nav-brand-text">
+        <h1>CRIDA</h1>
+        <p>Citizen Registration &amp; Identity Database Authority</p>
+      </div>
+    </a>
+
+    <div class="nav-links">
+      <a href="#about">About</a>
+      <a href="#services">Services</a>
+      <a href="#offices">Offices</a>
+      <a href="#how">How It Works</a>
     </div>
 
-    <div class="nav-section">
-      <div class="nav-label">System</div>
-      <nav>
-        <a href="#" data-tab="login" class="active"><i class="fas fa-sign-in-alt"></i> Login</a>
-        <a href="#" data-tab="dashboard" data-roles="all"><i class="fas fa-chart-pie"></i> Dashboard</a>
-      </nav>
-    </div>
-
-    <div class="nav-section">
-      <div class="nav-label">Citizens</div>
-      <nav>
-        <a href="#" data-tab="citizens" data-roles="all"><i class="fas fa-users"></i> Citizens</a>
-        <a href="#" data-tab="family" data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-sitemap"></i>
-          Family Tree</a>
-        <a href="#" data-tab="update" data-roles="Admin,Registrar"><i class="fas fa-edit"></i> Update Requests</a>
-      </nav>
-    </div>
-
-    <div class="nav-section">
-      <div class="nav-label">Documents</div>
-      <nav>
-        <a href="#" data-tab="pdf" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i
-            class="fas fa-file-pdf"></i> PDF Generator</a>
-        <a href="#" data-tab="camera" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i
-            class="fas fa-camera"></i> Camera Capture</a>
-        <a href="#" data-tab="biometric" data-roles="Admin,Passport_Officer,License_Officer"><i
-            class="fas fa-fingerprint"></i> Biometric</a>
-      </nav>
-    </div>
-
-    <div class="nav-section">
-      <div class="nav-label">Security</div>
-      <nav>
-        <a href="#" data-tab="criminal" data-roles="Admin,Security_Officer"><i class="fas fa-gavel"></i> Criminal
-          Records</a>
-        <a href="#" data-tab="watchlist" data-roles="Admin,Security_Officer"><i class="fas fa-eye"></i> Watchlist</a>
-        <a href="#" data-tab="complaints" data-roles="Admin,Registrar"><i class="fas fa-exclamation-circle"></i>
-          Complaints</a>
-      </nav>
-    </div>
-
-    <div class="nav-section">
-      <div class="nav-label">Admin</div>
-      <nav>
-        <a href="#" data-tab="notif" data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-bell"></i>
-          Notifications</a>
-        <a href="#" data-tab="perms" data-roles="Admin"><i class="fas fa-key"></i> Permissions</a>
-        <a href="#" data-tab="audit" data-roles="Admin,Security_Officer"><i class="fas fa-list-check"></i> Audit Log</a>
-      </nav>
+    <div class="nav-cta">
+      <a href="officerportal.html" class="btn-nav-outline"><i class="fas fa-shield-halved" style="font-size:0.75rem"></i> Officer Login</a>
+      <a href="citizen.html" class="btn-nav-solid"><i class="fas fa-id-card" style="font-size:0.75rem"></i> Citizen Portal</a>
     </div>
   </div>
+</nav>
 
-  <div class="main">
-    <header>
-      <h1 id="page-title"><i class="fas fa-shield-halved"></i> CRIDA Phase 2 API Test Harness</h1>
-      <div style="display:flex; gap:10px; align-items:center;">
-        <button id="theme-toggle" class="btn btn-secondary btn-sm" onclick="toggleTheme()" title="Toggle Theme" style="border-radius:50%; padding:6px 10px;">
-          <i class="fas fa-sun"></i>
-        </button>
-        <div id="user-info" class="hidden">
-          <span id="user-name"></span>
-          <span id="user-role" class="badge info"></span>
-          <button onclick="logout()" class="btn btn-danger btn-sm"><i class="fas fa-sign-out-alt"></i> Logout</button>
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-ring"></div>
+  <div class="hero-blob"></div>
+  <svg class="hero-bg-art" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="85" cy="100" r="55" fill="none" stroke="#0b4d2e" stroke-width="2"/>
+    <circle cx="100" cy="100" r="45" fill="#0b4d2e"/>
+    <polygon points="150,72 154,85 168,85 157,93 161,106 150,98 139,106 143,93 132,85 146,85" fill="white"/>
+  </svg>
 
-        </div>
+  <div class="hero-content">
+    <div class="hero-left">
+      <div class="hero-badge">
+        <i class="fas fa-star-and-crescent"></i>
+        Government of Pakistan — Official Portal
       </div>
-    </header>
-
-    <!-- LOGIN -->
-    <div id="tab-login" class="tab-content active">
-      <div class="login-wrap">
-        <div class="login-card">
-          <div class="brand">
-            <i class="fas fa-shield-halved"></i>
-            <h2>CRIDA Officer Login</h2>
-            <p>Citizen Registration &amp; Identity Database Authority</p>
-          </div>
-          <div class="form-group">
-            <label>Email</label>
-            <input id="login-email" type="email" value="officer5@crida.pk" placeholder="officer@crida.pk">
-          </div>
-          <div class="form-group">
-            <label>Password</label>
-            <input id="login-pass" type="password" value="hash" placeholder="Password">
-          </div>
-          <div class="form-group" style="font-size:0.78rem;color:var(--text-muted)">
-            Default: <code>officer5@crida.pk</code> / <code>hash</code> (Admin)<br>
-            After setup_database.sql: same email / <code>Admin@1234</code>
-          <p style="text-align:center;margin-top:14px;font-size:0.75rem;color:var(--text-muted)">Are you a citizen? <a href="citizen.html" style="color:#0a5c36;font-weight:600">Citizen Portal &rarr;</a></p>
-          </div>
-          <button onclick="doLogin()" class="btn btn-primary btn-block">
-            <i class="fas fa-sign-in-alt"></i> Login
-          </button>
-          <div id="login-msg" class="msg-box"></div>
-        </div>
-      </div>
-      <p style="text-align:center;margin-top:14px;font-size:0.75rem;color:var(--text-muted)">
-        Are you a citizen? <a href="citizen.html" style="color:var(--accent)">Citizen Portal →</a>
+      <h1 class="hero-title">
+        Your Identity,<br>
+        <em>Secured &amp; Verified</em><br>
+        by the State
+      </h1>
+      <p class="hero-sub">
+        CRIDA is Pakistan's national civilian identity authority — responsible for registration, verification, and secure management of citizen identity records across all four provinces and territories.
       </p>
-    </div>
-
-    <!-- DASHBOARD -->
-    <div id="tab-dashboard" class="tab-content">
-      <div class="stats-grid" id="stats-grid"></div>
-      <div class="card">
-        <h3><i class="fas fa-terminal"></i> ACID Transaction Log</h3>
-        <div id="acid-log" class="log-box">Waiting for transactions...</div>
+      <div class="hero-actions">
+        <a href="citizen.html" class="btn-hero-primary">
+          <i class="fas fa-id-card"></i>
+          Access Citizen Portal
+        </a>
+        <a href="#services" class="btn-hero-secondary">
+          <i class="fas fa-list"></i>
+          Explore Services
+        </a>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="num">220M+</div>
+          <div class="lbl">Citizens Registered</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="hero-stat">
+          <div class="num">8</div>
+          <div class="lbl">Regional Offices</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="hero-stat">
+          <div class="num">99.9%</div>
+          <div class="lbl">System Uptime</div>
+        </div>
       </div>
     </div>
 
-    <!-- CITIZENS -->
-    <div id="tab-citizens" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-users"></i> Citizens Registry</h3>
-        <div class="toolbar">
-          <input id="citizen-search" placeholder="Search name or national ID...">
-          <button onclick="searchCitizens()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-          <button onclick="loadCitizens()" class="btn btn-secondary"><i class="fas fa-sync"></i> Refresh</button>
-        </div>
-        <div id="citizens-table"></div>
-      </div>
-    </div>
-
-    <!-- PDF GENERATOR -->
-    <div id="tab-pdf" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-file-pdf"></i> Government Document PDF Generator</h3>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Document Type</label>
-            <select id="pdf-type">
-              <option value="cnic">CNIC Card</option>
-              <option value="passport">Passport</option>
-              <option value="license">Driving License</option>
-              <option value="birth-certificate">Birth Certificate</option>
-              <option value="death-certificate">Death Certificate</option>
-              <option value="marriage-certificate">Marriage Certificate</option>
-              <option value="payment-slip">Payment Slip</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>ID (Citizen / Marriage / Payment)</label>
-            <input id="pdf-id" type="number" value="7" min="1">
-          </div>
-        </div>
-        <button onclick="generatePDF()" class="btn btn-primary">
-          <i class="fas fa-download"></i> Generate &amp; Download PDF
-        </button>
-        <div id="pdf-msg" class="msg-box"></div>
-      </div>
-    </div>
-
-    <!-- FAMILY TREE -->
-    <div id="tab-family" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-sitemap"></i> Family Tree Viewer</h3>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Citizen ID</label>
-            <input id="family-cid" type="number" value="7" min="1">
-          </div>
-          <div class="form-group" style="flex:0">
-            <label>&nbsp;</label>
-            <button onclick="loadFamilyTree()" class="btn btn-primary"><i class="fas fa-search"></i> Load Tree</button>
-          </div>
-        </div>
-        <div id="family-result"></div>
-      </div>
-    </div>
-
-    <!-- CRIMINAL RECORDS -->
-    <div id="tab-criminal" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-gavel"></i> Criminal Records</h3>
-        <div class="toolbar">
-          <input id="criminal-cid" type="number" placeholder="Filter by Citizen ID (optional)">
-          <button onclick="loadCriminalRecords()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-          <button onclick="showAddCriminal()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Record</button>
-        </div>
-        <div id="add-criminal-form" style="display:none;margin-bottom:14px">
-          <div class="form-row">
-            <div class="form-group"><label>Citizen ID</label><input id="cr-cid" type="number"></div>
-            <div class="form-group"><label>Case Number</label><input id="cr-case" placeholder="CR-2026-001"></div>
-            <div class="form-group"><label>Offense</label><input id="cr-offense" placeholder="e.g. Fraud"></div>
-          </div>
-          <div class="form-row">
-            <div class="form-group"><label>Offense Date</label><input id="cr-date" type="date"></div>
-            <div class="form-group"><label>Status</label>
-              <select id="cr-status">
-                <option>Charged</option>
-                <option>On Trial</option>
-                <option>Convicted</option>
-                <option>Acquitted</option>
-              </select>
+    <div class="hero-right">
+      <div class="hero-card-wrap">
+        <div class="hero-card-bg"></div>
+        <div class="hero-card">
+          <div class="card-float-badge">Live Services</div>
+          <div class="hc-header">
+            <div class="hc-emblem">
+              <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" width="26" height="26">
+                <circle cx="27" cy="30" r="13" fill="white"/>
+                <circle cx="32" cy="30" r="10.5" fill="#0b4d2e"/>
+                <polygon points="44,21 45.5,25.5 50,25.5 46.5,28.5 48,33 44,30 40,33 41.5,28.5 38,25.5 42.5,25.5" fill="white"/>
+              </svg>
             </div>
-            <div class="form-group"><label>Court</label><input id="cr-court" placeholder="Court name"></div>
-          </div>
-          <button onclick="addCriminalRecord()" class="btn btn-danger"><i class="fas fa-plus"></i> Submit
-            Record</button>
-        </div>
-        <div id="criminal-table"></div>
-      </div>
-    </div>
-
-    <!-- WATCHLIST -->
-    <div id="tab-watchlist" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-eye"></i> Watchlist</h3>
-        <div class="toolbar">
-          <button onclick="loadWatchlist()" class="btn btn-primary"><i class="fas fa-sync"></i> Load Watchlist</button>
-          <button onclick="showAddWatchlist()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add to
-            Watchlist</button>
-        </div>
-        <div id="add-watchlist-form" style="display:none;margin-bottom:14px">
-          <div class="form-row">
-            <div class="form-group"><label>Citizen ID</label><input id="wl-cid" type="number" placeholder="Citizen ID">
+            <div>
+              <div class="hc-title">Citizen Self-Service</div>
+              <div class="hc-sub">Access your complete identity record</div>
             </div>
-            <div class="form-group">
-              <label>Watchlist Type</label>
-              <select id="wl-type">
-                <option value="Security">Security</option>
-                <option value="Fraud">Fraud</option>
-                <option value="Immigration">Immigration</option>
-                <option value="Court Order">Court Order</option>
-              </select>
-            </div>
-            <div class="form-group"><label>Expiry Date (optional)</label><input id="wl-expiry" type="date"></div>
           </div>
-          <div class="form-group">
-            <label>Reason</label>
-            <input id="wl-reason" placeholder="Reason for watchlisting" style="width:100%">
-          </div>
-          <button onclick="addToWatchlist()" class="btn btn-danger"><i class="fas fa-plus"></i> Add to
-            Watchlist</button>
+          <ul class="hc-service-list">
+            <li class="hc-service">
+              <div class="hc-service-icon"><i class="fas fa-id-card"></i></div>
+              <div class="hc-service-text">
+                <strong>CNIC Management</strong>
+                <span>Apply, renew & track your National ID</span>
+              </div>
+              <i class="fas fa-chevron-right hc-service-arrow"></i>
+            </li>
+            <li class="hc-service">
+              <div class="hc-service-icon"><i class="fas fa-passport"></i></div>
+              <div class="hc-service-text">
+                <strong>Passport Services</strong>
+                <span>Applications & status tracking</span>
+              </div>
+              <i class="fas fa-chevron-right hc-service-arrow"></i>
+            </li>
+            <li class="hc-service">
+              <div class="hc-service-icon"><i class="fas fa-car"></i></div>
+              <div class="hc-service-text">
+                <strong>Driving License</strong>
+                <span>License records & renewal</span>
+              </div>
+              <i class="fas fa-chevron-right hc-service-arrow"></i>
+            </li>
+            <li class="hc-service">
+              <div class="hc-service-icon"><i class="fas fa-file-certificate" style="font-size:11px"></i></div>
+              <div class="hc-service-text">
+                <strong>Certificates</strong>
+                <span>Birth, marriage & death records</span>
+              </div>
+              <i class="fas fa-chevron-right hc-service-arrow"></i>
+            </li>
+          </ul>
         </div>
-        <div id="watchlist-table"></div>
       </div>
     </div>
-
-    <!-- UPDATE REQUESTS -->
-    <div id="tab-update" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-edit"></i> Citizen Self-Update Requests</h3>
-        <div class="form-row">
-          <div class="form-group"><label>Citizen ID</label><input id="upd-cid" type="number" value="7"></div>
-          <div class="form-group">
-            <label>Field to Update</label>
-            <select id="upd-field">
-              <option>first_name</option>
-              <option>last_name</option>
-              <option>blood_group</option>
-              <option>marital_status</option>
-            </select>
-          </div>
-          <div class="form-group"><label>New Value</label><input id="upd-value" placeholder="New value"></div>
-        </div>
-        <div class="form-group">
-          <label>Reason</label>
-          <input id="upd-reason" placeholder="Reason for update request" style="width:100%">
-        </div>
-        <div class="btn-row">
-          <button onclick="submitUpdateRequest()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit
-            Request</button>
-          <button onclick="loadUpdateRequests()" class="btn btn-secondary"><i class="fas fa-list"></i> View
-            Pending</button>
-        </div>
-        <div id="update-table"></div>
-      </div>
-    </div>
-
-    <!-- CAMERA -->
-    <div id="tab-camera" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-camera"></i> Camera Capture + Background Removal</h3>
-        <div class="form-group">
-          <label>Citizen ID</label>
-          <input id="cam-cid" type="number" value="7" style="max-width:120px">
-        </div>
-        <video id="cam-video" autoplay playsinline width="320" height="240"></video>
-        <canvas id="cam-canvas" width="320" height="240" style="display:none"></canvas>
-        <div class="btn-row">
-          <button onclick="startCamera()" class="btn btn-secondary"><i class="fas fa-video"></i> Start Camera</button>
-          <button onclick="capturePhoto()" class="btn btn-primary"><i class="fas fa-camera"></i> Capture &amp;
-            Process</button>
-        </div>
-        <div id="cam-result"></div>
-      </div>
-    </div>
-
-    <!-- BIOMETRIC — drop-in replacement for the tab-biometric card content -->
-    <!-- Find the existing biometric card in index.html and replace everything
-       between <div id="tab-biometric" ...> and its closing </div></div>
-       with this block -->
-
-    <div id="tab-biometric" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-fingerprint"></i> Biometric Verification</h3>
-
-        <!-- Citizen ID (shared by all operations) -->
-        <div class="form-group">
-          <label>Citizen ID</label>
-          <input id="bio-cid" type="number" value="7" style="max-width:120px">
-        </div>
-
-        <!-- ── Shared camera ──────────────────────────────────────────── -->
-        <!-- One camera feed is reused for both face and fingerprint.      -->
-        <!-- The label above the video updates to tell the officer what    -->
-        <!-- to point the camera at.                                       -->
-        <div class="form-group" style="margin-top:8px">
-          <label id="bio-cam-label" style="font-weight:600">Camera</label>
-          <video id="bio-video" autoplay playsinline width="320" height="240"
-            style="display:none;border-radius:6px;margin:6px 0;border:1px solid var(--border)">
-          </video>
-          <div class="btn-row">
-            <button id="bio-cam-btn" class="btn btn-secondary btn-sm" onclick="startBioCamera()">
-              <i class="fas fa-video"></i> Start Camera
-            </button>
-          </div>
-        </div>
-
-        <hr style="border-color:var(--border);margin:18px 0">
-
-        <!-- ── FACE section ───────────────────────────────────────────── -->
-        <h4
-          style="margin:0 0 10px;color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:.05em">
-          <i class="fas fa-user-circle"></i> Face
-        </h4>
-        <div class="btn-row">
-          <button id="bio-enroll-btn" class="btn btn-secondary btn-sm" onclick="enrollBiometric()" disabled>
-            <i class="fas fa-plus-circle"></i> Enroll Face
-          </button>
-          <button id="bio-verify-face-btn" class="btn btn-primary btn-sm" onclick="verifyFace()" disabled>
-            <i class="fas fa-user-check"></i> Verify Face
-          </button>
-        </div>
-        <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
-          Start camera, position your face in frame, then click Enroll Face or Verify Face.
-        </p>
-
-        <hr style="border-color:var(--border);margin:18px 0">
-
-        <!-- ── FINGERPRINT section ────────────────────────────────────── -->
-        <h4
-          style="margin:0 0 10px;color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:.05em">
-          <i class="fas fa-fingerprint"></i> Fingerprint
-        </h4>
-        <div class="btn-row">
-          <button id="bio-enroll-fp-btn" class="btn btn-secondary btn-sm" onclick="enrollFingerprint()" disabled>
-            <i class="fas fa-plus-circle"></i> Enroll Fingerprint
-          </button>
-          <button id="bio-verify-fp-btn" class="btn btn-primary btn-sm" onclick="verifyFingerprint()" disabled>
-            <i class="fas fa-fingerprint"></i> Verify Fingerprint
-          </button>
-        </div>
-        <p style="font-size:0.72rem;color:var(--text-muted);margin-top:6px">
-          Start camera, hold finger flat and steady under good light, then click Enroll or Verify.
-        </p>
-
-        <!-- Result area (shared) -->
-        <div id="bio-result" style="margin-top:14px"></div>
-      </div>
-    </div>
-
-    <!-- COMPLAINTS -->
-    <div id="tab-complaints" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-exclamation-circle"></i> Complaints</h3>
-        <div class="form-group"><label>Citizen ID</label><input id="comp-cid" type="number" value="7"
-            style="max-width:120px"></div>
-        <div class="form-group"><label>Subject</label><input id="comp-subject" placeholder="Brief subject"></div>
-        <div class="form-group"><label>Description</label><textarea id="comp-desc" rows="3"
-            placeholder="Full description..."></textarea></div>
-        <div class="btn-row">
-          <button onclick="submitComplaint()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit
-            Complaint</button>
-          <button onclick="loadComplaints()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
-        </div>
-        <div id="complaints-table"></div>
-      </div>
-    </div>
-
-    <!-- NOTIFICATIONS -->
-    <div id="tab-notif" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-bell"></i> Notifications</h3>
-        <div class="toolbar">
-          <input id="notif-cid" type="number" placeholder="Citizen ID (optional)">
-          <label class="checkbox-label"><input id="notif-unread" type="checkbox"> Unread only</label>
-          <button onclick="loadNotifications()" class="btn btn-primary"><i class="fas fa-sync"></i> Load</button>
-          <button onclick="loadUnreadCount()" class="btn btn-secondary"><i class="fas fa-hashtag"></i> Unread
-            Count</button>
-        </div>
-        <div id="notif-count" style="margin-bottom:10px"></div>
-        <div id="notif-list"></div>
-      </div>
-    </div>
-
-    <!-- PERMISSIONS -->
-    <div id="tab-perms" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-key"></i> Permission Management (Admin Only)</h3>
-        <div class="form-row">
-          <div class="form-group"><label>Officer ID</label><input id="perm-oid" type="number" value="2"></div>
-          <div class="form-group">
-            <label>Permission</label>
-            <select id="perm-name">
-              <option>manage_citizens</option>
-              <option>manage_cnic</option>
-              <option>manage_passport</option>
-              <option>manage_license</option>
-              <option>manage_registrations</option>
-              <option>manage_security</option>
-              <option>manage_complaints</option>
-              <option>view_reports</option>
-              <option>manage_officers</option>
-              <option>manage_payments</option>
-              <option>generate_pdf</option>
-              <option>manage_biometric</option>
-            </select>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button onclick="grantPermission()" class="btn btn-success"><i class="fas fa-plus"></i> Grant</button>
-          <button onclick="revokePermission()" class="btn btn-danger"><i class="fas fa-minus"></i> Revoke</button>
-          <button onclick="loadPermissions()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
-          <button onclick="myPermissions()" class="btn btn-secondary"><i class="fas fa-user-tag"></i> My
-            Permissions</button>
-        </div>
-        <div id="perms-table"></div>
-      </div>
-    </div>
-
-    <!-- AUDIT LOG -->
-    <div id="tab-audit" class="tab-content">
-      <div class="card">
-        <h3><i class="fas fa-list-check"></i> Audit Log</h3>
-        <div class="toolbar">
-          <input id="audit-officer" type="number" placeholder="Officer ID">
-          <input id="audit-table-input" placeholder="Table name (e.g. Citizen)">
-          <select id="audit-action"
-            style="padding:8px 11px;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text)">
-            <option value="">All actions</option>
-            <option>INSERT</option>
-            <option>UPDATE</option>
-            <option>DELETE</option>
-            <option>VIEW</option>
-            <option>LOGIN</option>
-            <option>LOGOUT</option>
-          </select>
-          <button onclick="loadAuditLog()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-        </div>
-        <div id="audit-table-div"></div>
-      </div>
-    </div>
-
-    <div id="toast-container"></div>
   </div>
+</section>
 
-  <a href="chatbot.html" class="fab-chatbot" title="Open AI Assistant">
-    <i class="fas fa-robot"></i>
-    <span class="fab-text">AI Assistant</span>
-  </a>
+<div class="section-divider"></div>
 
+<!-- ABOUT -->
+<section class="about-section" id="about">
+  <div class="section-inner">
+    <div class="section-header">
+      <div class="section-eyebrow">What is CRIDA</div>
+      <h2 class="section-title">Pakistan's Central Identity Authority</h2>
+      <p class="section-desc">A unified, secure platform that connects every Pakistani citizen to their official government identity record.</p>
+    </div>
 
+    <div class="about-grid">
+      <div class="about-text">
+        <p>
+          <strong>CRIDA — the Citizen Registration &amp; Identity Database Authority</strong> — is the Government of Pakistan's primary institution responsible for the registration, maintenance, and verification of civilian identity data across the country.
+        </p>
+        <p>
+          Established to modernize Pakistan's identity infrastructure, CRIDA maintains a centralized, secure database encompassing <strong>national identity records, biometric data, family registrations, travel documents, and civil certificates</strong> for all citizens and registered residents.
+        </p>
+        <p>
+          Our mandate extends from issuing CNICs and passports to maintaining family tree records, managing criminal watchlists, and providing real-time identity verification services to government agencies, law enforcement, and authorized third parties.
+        </p>
+        <p>
+          Through our digital Citizen Self-Service Portal, Pakistanis can now access their records, download official documents, track applications, and request information updates — all without visiting a physical office.
+        </p>
+      </div>
+      <div class="about-visual">
+        <div class="about-card-stack">
+          <div class="acard acard-1">
+            <div class="acard-icon"><i class="fas fa-database"></i></div>
+            <h4>Central Identity Database</h4>
+            <p>A unified repository of every registered citizen's identity record, biometrics, and civil documentation — secured with enterprise-grade encryption.</p>
+          </div>
+          <div class="acard acard-2">
+            <div class="acard-icon"><i class="fas fa-shield-halved"></i></div>
+            <h4>Verified & Trusted</h4>
+            <p>CRIDA records are the authoritative source of truth for identity verification across all government and financial institutions in Pakistan.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
-  <script src="app.js"></script>
+<div class="section-divider"></div>
+
+<!-- SERVICES -->
+<section class="services-section" id="services">
+  <div class="section-inner">
+    <div class="section-header">
+      <div class="section-eyebrow">What We Offer</div>
+      <h2 class="section-title">Comprehensive Identity Services</h2>
+      <p class="section-desc">From issuance of national documents to civil record management — everything you need, digitally accessible.</p>
+    </div>
+
+    <div class="services-grid">
+      <div class="service-card fade-up">
+        <div class="sc-icon"><i class="fas fa-id-card"></i></div>
+        <div class="sc-title">CNIC — National Identity Card</div>
+        <p class="sc-desc">Apply for a new CNIC, renew an expiring card, report a lost card, or update personal information. Track your application status in real time through our portal.</p>
+      </div>
+      <div class="service-card fade-up">
+        <div class="sc-icon"><i class="fas fa-passport"></i></div>
+        <div class="sc-title">Passport Issuance & Renewal</div>
+        <p class="sc-desc">Submit new passport applications or renewal requests for ordinary, official, and diplomatic passports. Download your application slip and track processing at every stage.</p>
+      </div>
+      <div class="service-card fade-up">
+        <div class="sc-icon"><i class="fas fa-car"></i></div>
+        <div class="sc-title">Driving License Management</div>
+        <p class="sc-desc">Apply for learner's permits, motor vehicle licenses, and heavy transport licenses. Check test results and download your license once approved.</p>
+      </div>
+      <div class="service-card fade-up">
+        <div class="sc-icon"><i class="fas fa-baby"></i></div>
+        <div class="sc-title">Birth Registration</div>
+        <p class="sc-desc">Register newborns and obtain official birth certificates — a prerequisite for CNIC issuance, school enrollment, and passport applications.</p>
+      </div>
+      <div class="service-card fade-up">
+        <div class="sc-icon"><i class="fas fa-heart"></i></div>
+        <div class="sc-title">Marriage Certificates</div>
+        <p class="sc-desc">Register civil marriages and obtain official Nikah and marriage certificates recognized by all government and financial institutions.</p>
+      </div>
+      <div class="service-card fade-up">
+        <div class="sc-icon"><i class="fas fa-sitemap"></i></div>
+        <div class="sc-title">Family Tree & Relations</div>
+        <p class="sc-desc">View your complete family record including parents, spouse, children, and extended relations as maintained in the national register.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OFFICES -->
+<section class="offices-section" id="offices">
+  <div class="section-inner">
+    <div class="section-header">
+      <div class="section-eyebrow">Where to Find Us</div>
+      <h2 class="section-title">Regional Offices Across Pakistan</h2>
+      <p class="section-desc">Visit any of our offices for in-person assistance with complex cases, biometric enrollment, and document collection.</p>
+    </div>
+
+    <div class="offices-grid">
+      <div class="office-card fade-up">
+        <div class="oc-city">Islamabad</div>
+        <div class="oc-province">Federal Capital</div>
+        <div class="oc-detail"><i class="fas fa-map-marker-alt"></i> G-8/4, Mauve Area, Islamabad</div>
+        <div class="oc-detail"><i class="fas fa-phone"></i> +92-51-9207-000</div>
+        <div class="oc-detail"><i class="fas fa-envelope"></i> islamabad@crida.gov.pk</div>
+        <div class="oc-hours"><i class="fas fa-clock"></i> Mon–Fri · 08:00–16:00</div>
+      </div>
+      <div class="office-card fade-up">
+        <div class="oc-city">Lahore</div>
+        <div class="oc-province">Punjab</div>
+        <div class="oc-detail"><i class="fas fa-map-marker-alt"></i> 7-Bank Square, The Mall, Lahore</div>
+        <div class="oc-detail"><i class="fas fa-phone"></i> +92-42-9921-100</div>
+        <div class="oc-detail"><i class="fas fa-envelope"></i> lahore@crida.gov.pk</div>
+        <div class="oc-hours"><i class="fas fa-clock"></i> Mon–Fri · 08:00–16:00</div>
+      </div>
+      <div class="office-card fade-up">
+        <div class="oc-city">Karachi</div>
+        <div class="oc-province">Sindh</div>
+        <div class="oc-detail"><i class="fas fa-map-marker-alt"></i> Civic Centre, Block-4, Gulshan-e-Iqbal</div>
+        <div class="oc-detail"><i class="fas fa-phone"></i> +92-21-9921-200</div>
+        <div class="oc-detail"><i class="fas fa-envelope"></i> karachi@crida.gov.pk</div>
+        <div class="oc-hours"><i class="fas fa-clock"></i> Mon–Fri · 08:00–16:00</div>
+      </div>
+      <div class="office-card fade-up">
+        <div class="oc-city">Peshawar</div>
+        <div class="oc-province">Khyber Pakhtunkhwa</div>
+        <div class="oc-detail"><i class="fas fa-map-marker-alt"></i> Phase-4, Hayatabad Industrial Estate</div>
+        <div class="oc-detail"><i class="fas fa-phone"></i> +92-91-9210-400</div>
+        <div class="oc-detail"><i class="fas fa-envelope"></i> peshawar@crida.gov.pk</div>
+        <div class="oc-hours"><i class="fas fa-clock"></i> Mon–Fri · 08:00–16:00</div>
+      </div>
+      <div class="office-card fade-up">
+        <div class="oc-city">Quetta</div>
+        <div class="oc-province">Balochistan</div>
+        <div class="oc-detail"><i class="fas fa-map-marker-alt"></i> Zarghoon Road, Quetta Cantonment</div>
+        <div class="oc-detail"><i class="fas fa-phone"></i> +92-81-9201-700</div>
+        <div class="oc-detail"><i class="fas fa-envelope"></i> quetta@crida.gov.pk</div>
+        <div class="oc-hours"><i class="fas fa-clock"></i> Mon–Fri · 08:00–16:00</div>
+      </div>
+      <div class="office-card fade-up">
+        <div class="oc-city">Multan</div>
+        <div class="oc-province">Punjab — South</div>
+        <div class="oc-detail"><i class="fas fa-map-marker-alt"></i> Kutchery Chowk, Civil Lines, Multan</div>
+        <div class="oc-detail"><i class="fas fa-phone"></i> +92-61-9200-600</div>
+        <div class="oc-detail"><i class="fas fa-envelope"></i> multan@crida.gov.pk</div>
+        <div class="oc-hours"><i class="fas fa-clock"></i> Mon–Fri · 08:00–16:00</div>
+      </div>
+      <div class="office-card fade-up">
+        <div class="oc-city">Faisalabad</div>
+        <div class="oc-province">Punjab — Central</div>
+        <div class="oc-detail"><i class="fas fa-map-marker-alt"></i> D-Ground, People's Colony, Faisalabad</div>
+        <div class="oc-detail"><i class="fas fa-phone"></i> +92-41-9220-300</div>
+        <div class="oc-detail"><i class="fas fa-envelope"></i> faisalabad@crida.gov.pk</div>
+        <div class="oc-hours"><i class="fas fa-clock"></i> Mon–Fri · 08:00–16:00</div>
+      </div>
+      <div class="office-card fade-up">
+        <div class="oc-city">Gilgit</div>
+        <div class="oc-province">GB &amp; AJK</div>
+        <div class="oc-detail"><i class="fas fa-map-marker-alt"></i> Jutial, Gilgit-Baltistan</div>
+        <div class="oc-detail"><i class="fas fa-phone"></i> +92-58-1920-800</div>
+        <div class="oc-detail"><i class="fas fa-envelope"></i> gilgit@crida.gov.pk</div>
+        <div class="oc-hours"><i class="fas fa-clock"></i> Mon–Fri · 09:00–15:00</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-section" id="how">
+  <div class="section-inner">
+    <div class="section-header">
+      <div class="section-eyebrow">Simple Process</div>
+      <h2 class="section-title">How to Access Your Records</h2>
+      <p class="section-desc">Get your government identity documents and records in four easy steps through our secure digital portal.</p>
+    </div>
+
+    <div class="steps-grid">
+      <div class="step-card fade-up">
+        <div class="step-num">1</div>
+        <div class="step-title">Verify Identity</div>
+        <p class="step-desc">Enter your 13-digit National Identity Number and your CRIDA Citizen ID to authenticate your access to the portal.</p>
+      </div>
+      <div class="step-card fade-up">
+        <div class="step-num">2</div>
+        <div class="step-title">Access Records</div>
+        <p class="step-desc">View your complete profile — personal information, documents, applications, family tree, and notifications — all in one place.</p>
+      </div>
+      <div class="step-card fade-up">
+        <div class="step-num">3</div>
+        <div class="step-title">Download Documents</div>
+        <p class="step-desc">Generate official PDFs of your CNIC, passport, driving license, birth certificate, and other civil records instantly.</p>
+      </div>
+      <div class="step-card fade-up">
+        <div class="step-num">4</div>
+        <div class="step-title">Track & Update</div>
+        <p class="step-desc">Monitor application statuses, submit data correction requests, file complaints, and receive real-time notifications from CRIDA.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div style="position:relative;z-index:2">
+    <h2>Ready to Access Your Records?</h2>
+    <p>Log into the CRIDA Citizen Portal with your National ID Number and manage your identity records from anywhere in Pakistan.</p>
+    <div class="cta-actions">
+      <a href="citizen.html" class="btn-cta-white">
+        <i class="fas fa-id-card"></i>
+        Citizen Portal Login
+      </a>
+      <a href="index.html" class="btn-cta-outline">
+        <i class="fas fa-shield-halved"></i>
+        Officer Portal
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <h3>CRIDA</h3>
+        <p style="font-size:0.72rem;color:rgba(255,255,255,0.35);margin-bottom:6px;letter-spacing:0.06em">CITIZEN REGISTRATION &amp; IDENTITY DATABASE AUTHORITY</p>
+        <p>An autonomous authority of the Government of Pakistan. Responsible for the registration and verification of civilian identity across all provinces and territories.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="citizen.html">Citizen Portal</a>
+        <a href="citizen.html">CNIC Services</a>
+        <a href="citizen.html">Passport Services</a>
+        <a href="citizen.html">Driving License</a>
+        <a href="citizen.html">Civil Certificates</a>
+      </div>
+      <div class="footer-col">
+        <h4>Organisation</h4>
+        <a href="#about">About CRIDA</a>
+        <a href="#offices">Our Offices</a>
+        <a href="#">Careers</a>
+        <a href="#">Press &amp; Media</a>
+        <a href="#">Annual Reports</a>
+      </div>
+      <div class="footer-col">
+        <h4>Help</h4>
+        <a href="#">FAQs</a>
+        <a href="#">Contact Us</a>
+        <a href="#">Complaint Portal</a>
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Use</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>© 2025 Citizen Registration &amp; Identity Database Authority — Government of Pakistan. All rights reserved.</p>
+      <div class="footer-flag">
+        <div class="pk-flag">
+          <div class="white-stripe"></div>
+          <div class="green-stripe"></div>
+        </div>
+        Islamic Republic of Pakistan
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Intersection Observer for fade-up animations
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+</script>
 </body>
-
 </html>

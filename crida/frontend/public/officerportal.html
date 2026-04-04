@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRIDA — Officer Portal</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design tokens — identical to citizen.html ── */
+    :root {
+      --green:#0a5c36;--green-mid:#0d7a49;--green-light:#16a365;
+      --green-pale:#e8f5ee;--green-glow:rgba(13,122,73,0.12);
+      --white:#ffffff;--off-white:#f7faf8;
+      --border:#c8e0d4;--border-dark:#a0c8b4;
+      --text:#0d1f15;--text-mid:#2d5c42;--text-muted:#6b9c80;
+      --gold:#c8962a;--danger:#c0392b;--warning:#d4860d;--success:#0a6641;
+      --radius:10px;
+      --shadow:0 2px 16px rgba(10,92,54,0.10);
+      --shadow-lg:0 8px 40px rgba(10,92,54,0.18);
+      --sidebar-w:240px;
+    }
+
+    *{box-sizing:border-box;margin:0;padding:0;}
+    html,body{height:100%;}
+    body{
+      background:var(--off-white);color:var(--text);
+      font-family:'IBM Plex Sans',sans-serif;font-size:14px;
+      display:flex;flex-direction:column;
+    }
+
+    /* Subtle tiled watermark — same as citizen.html */
+    body::before{
+      content:'';position:fixed;inset:0;
+      background-image:url("/markhor.jpeg");
+      background-size:260px auto;background-repeat:repeat;background-position:center;
+      opacity:0.035;filter:invert(30%) sepia(80%) saturate(400%) hue-rotate(100deg);
+      pointer-events:none;z-index:0;
+    }
+
+    /* ── GOV STRIPE ── */
+    .gov-stripe{
+      background:var(--green);color:white;text-align:center;
+      padding:6px;font-size:0.68rem;letter-spacing:.12em;font-weight:500;
+      position:relative;z-index:20;flex-shrink:0;
+    }
+
+    /* ── LAYOUT ── */
+    .app-shell{display:flex;flex:1;overflow:hidden;position:relative;z-index:1;}
+
+    /* ── SIDEBAR ── */
+    .sidebar{
+      width:var(--sidebar-w);flex-shrink:0;
+      background:var(--green);
+      display:flex;flex-direction:column;
+      overflow-y:auto;
+      box-shadow:2px 0 20px rgba(10,92,54,0.25);
+      position:relative;z-index:10;
+    }
+
+    .sidebar-logo{
+      padding:20px 18px 14px;
+      display:flex;align-items:center;gap:12px;
+      border-bottom:1px solid rgba(255,255,255,0.1);
+      flex-shrink:0;
+    }
+
+    .sidebar-logo a{text-decoration:none;display:flex;align-items:center;gap:12px;}
+
+    .logo-emblem{
+      width:38px;height:38px;border-radius:50%;
+      background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.25);
+      display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    }
+
+    .logo-text{
+      font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;
+      color:white;letter-spacing:.02em;line-height:1.15;
+    }
+
+    .logo-sub{font-size:.6rem;color:rgba(255,255,255,.55);letter-spacing:.06em;margin-top:1px;}
+
+    .sidebar-home{
+      display:flex;align-items:center;gap:8px;margin:10px 12px 0;
+      padding:7px 12px;border-radius:7px;background:rgba(255,255,255,.07);
+      color:rgba(255,255,255,.7);font-size:.76rem;text-decoration:none;
+      border:1px solid rgba(255,255,255,.1);transition:all .15s;
+    }
+
+    .sidebar-home:hover{background:rgba(255,255,255,.14);color:white;}
+
+    .nav-section{padding:14px 12px 4px;flex-shrink:0;}
+
+    .nav-label{
+      font-size:.58rem;font-weight:700;letter-spacing:.12em;
+      text-transform:uppercase;color:rgba(255,255,255,.45);
+      padding:0 4px;margin-bottom:5px;
+    }
+
+    .nav-section nav a{
+      display:flex;align-items:center;gap:9px;padding:8px 10px;
+      border-radius:7px;color:rgba(255,255,255,.7);
+      text-decoration:none;font-size:.8rem;font-weight:500;
+      transition:all .15s;margin-bottom:2px;
+    }
+
+    .nav-section nav a i{width:14px;text-align:center;font-size:.82rem;opacity:.7;}
+    .nav-section nav a:hover{background:rgba(255,255,255,.1);color:white;}
+    .nav-section nav a:hover i{opacity:1;}
+    .nav-section nav a.active{background:rgba(255,255,255,.18);color:white;font-weight:600;}
+    .nav-section nav a.active i{opacity:1;}
+
+    .sidebar-footer{
+      margin-top:auto;padding:14px 12px;
+      border-top:1px solid rgba(255,255,255,.08);
+      font-size:.65rem;color:rgba(255,255,255,.35);
+      text-align:center;letter-spacing:.04em;
+    }
+
+    /* ── MAIN ── */
+    .main{
+      flex:1;display:flex;flex-direction:column;overflow:hidden;
+      background:var(--off-white);
+    }
+
+    /* ── TOPBAR ── */
+    .topbar{
+      background:white;border-bottom:1px solid var(--border);
+      box-shadow:var(--shadow);padding:0 24px;height:60px;
+      display:flex;align-items:center;justify-content:space-between;
+      gap:16px;flex-shrink:0;position:relative;z-index:5;
+    }
+
+    .topbar-title{
+      font-family:'Playfair Display',serif;font-size:1rem;
+      color:var(--green);font-weight:700;display:flex;align-items:center;gap:9px;
+    }
+
+    .topbar-right{display:flex;align-items:center;gap:10px;}
+
+    #user-info{display:flex;align-items:center;gap:8px;}
+    #user-info.hidden{display:none;}
+    #user-name{font-size:.82rem;font-weight:600;color:var(--text-mid);}
+
+    /* ── CONTENT ── */
+    .content-area{flex:1;overflow-y:auto;padding:24px;}
+
+    .tab-content{display:none;}
+    .tab-content.active{display:block;animation:fadeIn .2s ease;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ── CARDS ── */
+    .card{
+      background:white;border:1px solid var(--border);border-radius:var(--radius);
+      box-shadow:var(--shadow);padding:22px;margin-bottom:16px;
+    }
+
+    .card h3{
+      font-family:'Playfair Display',serif;font-size:.98rem;color:var(--green);
+      margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:9px;
+    }
+
+    .card h3 i{opacity:.6;}
+
+    /* ── STATS GRID ── */
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:16px;}
+
+    .stat-card{
+      background:white;border:1px solid var(--border);border-radius:var(--radius);
+      padding:18px;box-shadow:var(--shadow);
+      display:flex;flex-direction:column;gap:6px;
+      border-top:3px solid var(--green-light);
+      transition:border-top-color .15s;
+    }
+
+    .stat-card:hover{border-top-color:var(--green);}
+    .stat-val{font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:700;color:var(--green);}
+    .stat-lbl{font-size:.72rem;color:var(--text-muted);font-weight:500;}
+
+    /* ── TOOLBAR ── */
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+    .toolbar input,.toolbar select{
+      padding:8px 11px;border:1.5px solid var(--border);border-radius:7px;
+      background:white;color:var(--text);font-family:'IBM Plex Sans',sans-serif;
+      font-size:.83rem;outline:none;transition:border-color .15s;min-width:160px;
+    }
+    .toolbar input:focus,.toolbar select:focus{border-color:var(--green);}
+
+    /* ── FORMS ── */
+    .form-group{margin-bottom:13px;}
+    .form-group label{display:block;font-size:.7rem;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+    .form-group input,.form-group textarea,.form-group select{
+      width:100%;padding:9px 11px;background:white;border:1.5px solid var(--border);
+      border-radius:7px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;
+      font-size:.84rem;transition:border-color .15s,box-shadow .15s;outline:none;
+    }
+    .form-group input:focus,.form-group textarea:focus,.form-group select:focus{
+      border-color:var(--green);box-shadow:0 0 0 3px rgba(13,122,73,.1);
+    }
+
+    .form-row{display:flex;gap:12px;flex-wrap:wrap;}
+    .form-row .form-group{flex:1;min-width:150px;}
+    .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+
+    /* ── BUTTONS ── */
+    .btn{padding:9px 18px;border:none;border-radius:7px;font-family:'IBM Plex Sans',sans-serif;font-size:.82rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s;}
+    .btn-primary{background:var(--green);color:white;box-shadow:0 2px 8px rgba(10,92,54,.25);}
+    .btn-primary:hover{background:var(--green-mid);transform:translateY(-1px);box-shadow:0 4px 14px rgba(10,92,54,.3);}
+    .btn-secondary{background:white;color:var(--green);border:1.5px solid var(--border);}
+    .btn-secondary:hover{border-color:var(--green);background:var(--green-pale);}
+    .btn-danger{background:var(--danger);color:white;}
+    .btn-danger:hover{background:#a93226;transform:translateY(-1px);}
+    .btn-success{background:#0a6641;color:white;}
+    .btn-success:hover{background:#084d31;transform:translateY(-1px);}
+    .btn-sm{padding:6px 12px;font-size:.76rem;}
+    .btn-block{width:100%;justify-content:center;}
+    .btn:active{transform:translateY(0)!important;}
+
+    /* ── BADGES ── */
+    .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.68rem;font-weight:600;letter-spacing:.02em;}
+    .badge.success,.badge-success{background:#e6f7f0;color:#0a6641;}
+    .badge.warning,.badge-warning{background:#fef3e2;color:#a06010;}
+    .badge.danger,.badge-danger{background:#fde8e8;color:#b91c1c;}
+    .badge.info,.badge-info{background:var(--green-pale);color:var(--green);}
+
+    /* ── TABLES ── */
+    .table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+    table{width:100%;border-collapse:collapse;font-size:.8rem;}
+    thead th{
+      padding:10px 14px;text-align:left;font-size:.67rem;
+      font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+      color:var(--text-muted);background:var(--off-white);
+      border-bottom:2px solid var(--border);
+    }
+    tbody td{padding:11px 14px;border-bottom:1px solid var(--border);color:var(--text);}
+    tbody tr:last-child td{border-bottom:none;}
+    tbody tr:hover td{background:#f0f8f4;}
+
+    /* ── LOG BOX ── */
+    .log-box{
+      background:#f0f8f4;border:1px solid var(--border);border-radius:8px;
+      padding:14px;font-family:'IBM Plex Mono',monospace;font-size:.75rem;
+      color:var(--text-mid);min-height:100px;max-height:240px;overflow-y:auto;
+      line-height:1.7;
+    }
+
+    /* ── MSG BOX ── */
+    .msg-box{margin-top:10px;font-size:.82rem;}
+    .msg-box.ok{color:var(--success);}
+    .msg-box.err{color:var(--danger);}
+    .msg-box.info{color:var(--green);}
+
+    /* ── LOGIN ── */
+    .login-wrap{display:flex;align-items:center;justify-content:center;min-height:70vh;}
+    .login-card{
+      background:white;border:1px solid var(--border);border-radius:16px;
+      box-shadow:var(--shadow-lg);padding:44px 38px;width:100%;max-width:420px;
+    }
+
+    .brand{text-align:center;margin-bottom:28px;}
+    .brand i{font-size:2.2rem;color:var(--green);margin-bottom:10px;display:block;}
+    .brand h2{font-family:'Playfair Display',serif;font-size:1.4rem;color:var(--green);margin-bottom:5px;}
+    .brand p{font-size:.76rem;color:var(--text-muted);}
+
+    /* ── CAMERA / BIOMETRIC ── */
+    video{display:block;border-radius:8px;border:1px solid var(--border);margin:8px 0;background:#000;}
+
+    /* ── CHECKBOX ── */
+    .checkbox-label{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text-mid);cursor:pointer;}
+    .checkbox-label input{width:auto;}
+
+    /* ── TOAST ── */
+    #toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+    .toast{padding:11px 16px;border-radius:8px;font-size:.82rem;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.15);animation:slideIn .2s ease;max-width:300px;}
+    .toast.ok{background:var(--green);color:white;}
+    .toast.err{background:var(--danger);color:white;}
+    .toast.warn{background:var(--warning);color:white;}
+    @keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+    /* ── FAB ── */
+    .fab-chatbot{
+      position:fixed;bottom:24px;right:24px;z-index:100;
+      background:var(--green);color:white;border-radius:50px;
+      padding:12px 20px;text-decoration:none;font-size:.82rem;font-weight:600;
+      box-shadow:0 4px 20px rgba(10,92,54,.4);
+      display:flex;align-items:center;gap:9px;
+      transition:all .2s;
+    }
+    .fab-chatbot:hover{background:var(--green-mid);box-shadow:0 6px 24px rgba(10,92,54,.5);transform:translateY(-2px);}
+
+    code{font-family:'IBM Plex Mono',monospace;font-size:.8em;background:rgba(0,0,0,.05);padding:2px 5px;border-radius:4px;}
+
+    /* ── RESPONSIVE ── */
+    @media(max-width:800px){
+      .sidebar{display:none;}
+      .content-area{padding:16px;}
+    }
+  </style>
+</head>
+<body>
+
+<div class="gov-stripe">ISLAMIC REPUBLIC OF PAKISTAN &nbsp;·&nbsp; CITIZEN REGISTRATION &amp; IDENTITY DATABASE AUTHORITY &nbsp;·&nbsp; OFFICER PORTAL</div>
+
+<div class="app-shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <a href="landing.html">
+        <div class="logo-emblem">
+          <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" width="24" height="24">
+            <circle cx="27" cy="30" r="13" fill="white"/>
+            <circle cx="32" cy="30" r="10.5" fill="#0a5c36"/>
+            <polygon points="44,21 45.5,25.5 50,25.5 46.5,28.5 48,33 44,30 40,33 41.5,28.5 38,25.5 42.5,25.5" fill="white"/>
+          </svg>
+        </div>
+        <div>
+          <div class="logo-text">CRIDA</div>
+          <div class="logo-sub">Officer Portal</div>
+        </div>
+      </a>
+    </div>
+
+    <a href="landing.html" class="sidebar-home">
+      <i class="fas fa-home"></i> Back to CRIDA Home
+    </a>
+
+    <div class="nav-section">
+      <div class="nav-label">System</div>
+      <nav>
+        <a href="#" data-tab="login" class="active"><i class="fas fa-sign-in-alt"></i> Login</a>
+        <a href="#" data-tab="dashboard" data-roles="all"><i class="fas fa-chart-pie"></i> Dashboard</a>
+      </nav>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Citizens</div>
+      <nav>
+        <a href="#" data-tab="citizens" data-roles="all"><i class="fas fa-users"></i> Citizens</a>
+        <a href="#" data-tab="family" data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-sitemap"></i> Family Tree</a>
+        <a href="#" data-tab="update" data-roles="Admin,Registrar"><i class="fas fa-edit"></i> Update Requests</a>
+      </nav>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Documents</div>
+      <nav>
+        <a href="#" data-tab="pdf" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-file-pdf"></i> PDF Generator</a>
+        <a href="#" data-tab="camera" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-camera"></i> Camera Capture</a>
+        <a href="#" data-tab="biometric" data-roles="Admin,Passport_Officer,License_Officer"><i class="fas fa-fingerprint"></i> Biometric</a>
+      </nav>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Security</div>
+      <nav>
+        <a href="#" data-tab="criminal" data-roles="Admin,Security_Officer"><i class="fas fa-gavel"></i> Criminal Records</a>
+        <a href="#" data-tab="watchlist" data-roles="Admin,Security_Officer"><i class="fas fa-eye"></i> Watchlist</a>
+        <a href="#" data-tab="complaints" data-roles="Admin,Registrar"><i class="fas fa-exclamation-circle"></i> Complaints</a>
+      </nav>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Admin</div>
+      <nav>
+        <a href="#" data-tab="notif" data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-bell"></i> Notifications</a>
+        <a href="#" data-tab="perms" data-roles="Admin"><i class="fas fa-key"></i> Permissions</a>
+        <a href="#" data-tab="audit" data-roles="Admin,Security_Officer"><i class="fas fa-list-check"></i> Audit Log</a>
+      </nav>
+    </div>
+
+    <div class="sidebar-footer">CRIDA © 2025 · Gov. of Pakistan</div>
+  </aside>
+
+  <!-- MAIN AREA -->
+  <div class="main">
+
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="topbar-title">
+        <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" width="22" height="22">
+          <circle cx="27" cy="30" r="13" fill="white" stroke="#0a5c36" stroke-width="2"/>
+          <circle cx="32" cy="30" r="10.5" fill="#0a5c36"/>
+          <polygon points="44,21 45.5,25.5 50,25.5 46.5,28.5 48,33 44,30 40,33 41.5,28.5 38,25.5 42.5,25.5" fill="white"/>
+        </svg>
+        <span id="page-title">Officer Portal</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-secondary btn-sm" onclick="toggleTheme()" title="Toggle Theme" style="border-radius:50%;padding:7px 10px;">
+          <i class="fas fa-sun" id="theme-icon"></i>
+        </button>
+        <div id="user-info" class="hidden">
+          <span id="user-name"></span>
+          <span id="user-role" class="badge info"></span>
+          <button onclick="logout()" class="btn btn-danger btn-sm"><i class="fas fa-sign-out-alt"></i> Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content-area">
+
+      <!-- LOGIN -->
+      <div id="tab-login" class="tab-content active">
+        <div class="login-wrap">
+          <div class="login-card">
+            <div class="brand">
+              <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" style="margin:0 auto 10px;display:block">
+                <circle cx="27" cy="30" r="13" fill="white" stroke="#0a5c36" stroke-width="2"/>
+                <circle cx="32" cy="30" r="10.5" fill="#0a5c36"/>
+                <polygon points="44,21 45.5,25.5 50,25.5 46.5,28.5 48,33 44,30 40,33 41.5,28.5 38,25.5 42.5,25.5" fill="white"/>
+              </svg>
+              <h2>CRIDA Officer Login</h2>
+              <p>Citizen Registration &amp; Identity Database Authority</p>
+            </div>
+            <div class="form-group">
+              <label>Email</label>
+              <input id="login-email" type="email" value="officer5@crida.pk" placeholder="officer@crida.pk">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input id="login-pass" type="password" value="hash" placeholder="Password">
+            </div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:16px;padding:10px;background:var(--green-pale);border-radius:7px;border:1px solid var(--border);">
+              Default: <code>officer5@crida.pk</code> / <code>hash</code> (Admin)<br>
+              After setup_database.sql: same email / <code>Admin@1234</code>
+            </div>
+            <button onclick="doLogin()" class="btn btn-primary btn-block">
+              <i class="fas fa-sign-in-alt"></i> Login
+            </button>
+            <div id="login-msg" class="msg-box" style="text-align:center;margin-top:12px;"></div>
+            <div style="text-align:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+              <a href="citizen.html" style="font-size:.76rem;color:var(--green);font-weight:600;text-decoration:none;">
+                <i class="fas fa-id-card" style="margin-right:4px"></i>Citizen Portal →
+              </a>
+              &nbsp;&nbsp;
+              <a href="landing.html" style="font-size:.76rem;color:var(--text-muted);text-decoration:none;">
+                <i class="fas fa-home" style="margin-right:4px"></i>CRIDA Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div id="tab-dashboard" class="tab-content">
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="card">
+          <h3><i class="fas fa-terminal"></i> ACID Transaction Log</h3>
+          <div id="acid-log" class="log-box">Waiting for transactions...</div>
+        </div>
+      </div>
+
+      <!-- CITIZENS -->
+      <div id="tab-citizens" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-users"></i> Citizens Registry</h3>
+          <div class="toolbar">
+            <input id="citizen-search" placeholder="Search name or national ID...">
+            <button onclick="searchCitizens()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+            <button onclick="loadCitizens()" class="btn btn-secondary"><i class="fas fa-sync"></i> Refresh</button>
+          </div>
+          <div id="citizens-table"></div>
+        </div>
+      </div>
+
+      <!-- PDF GENERATOR -->
+      <div id="tab-pdf" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-file-pdf"></i> Government Document PDF Generator</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Document Type</label>
+              <select id="pdf-type">
+                <option value="cnic">CNIC Card</option>
+                <option value="passport">Passport</option>
+                <option value="license">Driving License</option>
+                <option value="birth-certificate">Birth Certificate</option>
+                <option value="death-certificate">Death Certificate</option>
+                <option value="marriage-certificate">Marriage Certificate</option>
+                <option value="payment-slip">Payment Slip</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>ID (Citizen / Marriage / Payment)</label>
+              <input id="pdf-id" type="number" value="7" min="1">
+            </div>
+          </div>
+          <button onclick="generatePDF()" class="btn btn-primary">
+            <i class="fas fa-download"></i> Generate &amp; Download PDF
+          </button>
+          <div id="pdf-msg" class="msg-box"></div>
+        </div>
+      </div>
+
+      <!-- FAMILY TREE -->
+      <div id="tab-family" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-sitemap"></i> Family Tree Viewer</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Citizen ID</label>
+              <input id="family-cid" type="number" value="7" min="1">
+            </div>
+            <div class="form-group" style="flex:0;min-width:auto">
+              <label>&nbsp;</label>
+              <button onclick="loadFamilyTree()" class="btn btn-primary"><i class="fas fa-search"></i> Load Tree</button>
+            </div>
+          </div>
+          <div id="family-result"></div>
+        </div>
+      </div>
+
+      <!-- CRIMINAL RECORDS -->
+      <div id="tab-criminal" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-gavel"></i> Criminal Records</h3>
+          <div class="toolbar">
+            <input id="criminal-cid" type="number" placeholder="Filter by Citizen ID (optional)">
+            <button onclick="loadCriminalRecords()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+            <button onclick="showAddCriminal()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add Record</button>
+          </div>
+          <div id="add-criminal-form" style="display:none;margin-bottom:14px;padding:16px;background:var(--green-pale);border-radius:8px;border:1px solid var(--border);">
+            <div class="form-row">
+              <div class="form-group"><label>Citizen ID</label><input id="cr-cid" type="number"></div>
+              <div class="form-group"><label>Case Number</label><input id="cr-case" placeholder="CR-2026-001"></div>
+              <div class="form-group"><label>Offense</label><input id="cr-offense" placeholder="e.g. Fraud"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Offense Date</label><input id="cr-date" type="date"></div>
+              <div class="form-group">
+                <label>Status</label>
+                <select id="cr-status">
+                  <option>Charged</option><option>On Trial</option>
+                  <option>Convicted</option><option>Acquitted</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Court</label><input id="cr-court" placeholder="Court name"></div>
+            </div>
+            <button onclick="addCriminalRecord()" class="btn btn-danger"><i class="fas fa-plus"></i> Submit Record</button>
+          </div>
+          <div id="criminal-table"></div>
+        </div>
+      </div>
+
+      <!-- WATCHLIST -->
+      <div id="tab-watchlist" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-eye"></i> Watchlist</h3>
+          <div class="toolbar">
+            <button onclick="loadWatchlist()" class="btn btn-primary"><i class="fas fa-sync"></i> Load Watchlist</button>
+            <button onclick="showAddWatchlist()" class="btn btn-secondary"><i class="fas fa-plus"></i> Add to Watchlist</button>
+          </div>
+          <div id="add-watchlist-form" style="display:none;margin-bottom:14px;padding:16px;background:var(--green-pale);border-radius:8px;border:1px solid var(--border);">
+            <div class="form-row">
+              <div class="form-group"><label>Citizen ID</label><input id="wl-cid" type="number"></div>
+              <div class="form-group">
+                <label>Watchlist Type</label>
+                <select id="wl-type">
+                  <option value="Security">Security</option><option value="Fraud">Fraud</option>
+                  <option value="Immigration">Immigration</option><option value="Court Order">Court Order</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Expiry Date (optional)</label><input id="wl-expiry" type="date"></div>
+            </div>
+            <div class="form-group">
+              <label>Reason</label>
+              <input id="wl-reason" placeholder="Reason for watchlisting" style="width:100%">
+            </div>
+            <button onclick="addToWatchlist()" class="btn btn-danger"><i class="fas fa-plus"></i> Add to Watchlist</button>
+          </div>
+          <div id="watchlist-table"></div>
+        </div>
+      </div>
+
+      <!-- UPDATE REQUESTS -->
+      <div id="tab-update" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-edit"></i> Citizen Self-Update Requests</h3>
+          <div class="form-row">
+            <div class="form-group"><label>Citizen ID</label><input id="upd-cid" type="number" value="7"></div>
+            <div class="form-group">
+              <label>Field to Update</label>
+              <select id="upd-field">
+                <option>first_name</option><option>last_name</option>
+                <option>blood_group</option><option>marital_status</option>
+              </select>
+            </div>
+            <div class="form-group"><label>New Value</label><input id="upd-value" placeholder="New value"></div>
+          </div>
+          <div class="form-group">
+            <label>Reason</label>
+            <input id="upd-reason" placeholder="Reason for update request" style="width:100%">
+          </div>
+          <div class="btn-row">
+            <button onclick="submitUpdateRequest()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Request</button>
+            <button onclick="loadUpdateRequests()" class="btn btn-secondary"><i class="fas fa-list"></i> View Pending</button>
+          </div>
+          <div id="update-table"></div>
+        </div>
+      </div>
+
+      <!-- CAMERA -->
+      <div id="tab-camera" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-camera"></i> Camera Capture + Background Removal</h3>
+          <div class="form-group">
+            <label>Citizen ID</label>
+            <input id="cam-cid" type="number" value="7" style="max-width:120px">
+          </div>
+          <video id="cam-video" autoplay playsinline width="320" height="240"></video>
+          <canvas id="cam-canvas" width="320" height="240" style="display:none"></canvas>
+          <div class="btn-row">
+            <button onclick="startCamera()" class="btn btn-secondary"><i class="fas fa-video"></i> Start Camera</button>
+            <button onclick="capturePhoto()" class="btn btn-primary"><i class="fas fa-camera"></i> Capture &amp; Process</button>
+          </div>
+          <div id="cam-result"></div>
+        </div>
+      </div>
+
+      <!-- BIOMETRIC -->
+      <div id="tab-biometric" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-fingerprint"></i> Biometric Verification</h3>
+          <div class="form-group">
+            <label>Citizen ID</label>
+            <input id="bio-cid" type="number" value="7" style="max-width:120px">
+          </div>
+          <div class="form-group" style="margin-top:8px">
+            <label id="bio-cam-label" style="font-weight:600">Camera</label>
+            <video id="bio-video" autoplay playsinline width="320" height="240" style="display:none"></video>
+            <div class="btn-row">
+              <button id="bio-cam-btn" class="btn btn-secondary btn-sm" onclick="startBioCamera()">
+                <i class="fas fa-video"></i> Start Camera
+              </button>
+            </div>
+          </div>
+          <hr style="border-color:var(--border);margin:16px 0">
+          <h4 style="font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px"><i class="fas fa-user-circle"></i> Face</h4>
+          <div class="btn-row">
+            <button id="bio-enroll-btn" class="btn btn-secondary btn-sm" onclick="enrollBiometric()" disabled><i class="fas fa-plus-circle"></i> Enroll Face</button>
+            <button id="bio-verify-face-btn" class="btn btn-primary btn-sm" onclick="verifyFace()" disabled><i class="fas fa-user-check"></i> Verify Face</button>
+          </div>
+          <p style="font-size:.72rem;color:var(--text-muted);margin-top:6px">Start camera, position face in frame, then click Enroll or Verify.</p>
+          <hr style="border-color:var(--border);margin:16px 0">
+          <h4 style="font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px"><i class="fas fa-fingerprint"></i> Fingerprint</h4>
+          <div class="btn-row">
+            <button id="bio-enroll-fp-btn" class="btn btn-secondary btn-sm" onclick="enrollFingerprint()" disabled><i class="fas fa-plus-circle"></i> Enroll Fingerprint</button>
+            <button id="bio-verify-fp-btn" class="btn btn-primary btn-sm" onclick="verifyFingerprint()" disabled><i class="fas fa-fingerprint"></i> Verify Fingerprint</button>
+          </div>
+          <p style="font-size:.72rem;color:var(--text-muted);margin-top:6px">Hold finger flat under good light, then click Enroll or Verify.</p>
+          <div id="bio-result" style="margin-top:14px"></div>
+        </div>
+      </div>
+
+      <!-- COMPLAINTS -->
+      <div id="tab-complaints" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-exclamation-circle"></i> Complaints</h3>
+          <div class="form-group"><label>Citizen ID</label><input id="comp-cid" type="number" value="7" style="max-width:120px"></div>
+          <div class="form-group"><label>Subject</label><input id="comp-subject" placeholder="Brief subject"></div>
+          <div class="form-group"><label>Description</label><textarea id="comp-desc" rows="3" placeholder="Full description..."></textarea></div>
+          <div class="btn-row">
+            <button onclick="submitComplaint()" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Submit Complaint</button>
+            <button onclick="loadComplaints()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
+          </div>
+          <div id="complaints-table"></div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div id="tab-notif" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-bell"></i> Notifications</h3>
+          <div class="toolbar">
+            <input id="notif-cid" type="number" placeholder="Citizen ID (optional)">
+            <label class="checkbox-label"><input id="notif-unread" type="checkbox"> Unread only</label>
+            <button onclick="loadNotifications()" class="btn btn-primary"><i class="fas fa-sync"></i> Load</button>
+            <button onclick="loadUnreadCount()" class="btn btn-secondary"><i class="fas fa-hashtag"></i> Unread Count</button>
+          </div>
+          <div id="notif-count" style="margin-bottom:10px"></div>
+          <div id="notif-list"></div>
+        </div>
+      </div>
+
+      <!-- PERMISSIONS -->
+      <div id="tab-perms" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-key"></i> Permission Management (Admin Only)</h3>
+          <div class="form-row">
+            <div class="form-group"><label>Officer ID</label><input id="perm-oid" type="number" value="2"></div>
+            <div class="form-group">
+              <label>Permission</label>
+              <select id="perm-name">
+                <option>manage_citizens</option><option>manage_cnic</option>
+                <option>manage_passport</option><option>manage_license</option>
+                <option>manage_registrations</option><option>manage_security</option>
+                <option>manage_complaints</option><option>view_reports</option>
+                <option>manage_officers</option><option>manage_payments</option>
+                <option>generate_pdf</option><option>manage_biometric</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button onclick="grantPermission()" class="btn btn-success"><i class="fas fa-plus"></i> Grant</button>
+            <button onclick="revokePermission()" class="btn btn-danger"><i class="fas fa-minus"></i> Revoke</button>
+            <button onclick="loadPermissions()" class="btn btn-secondary"><i class="fas fa-list"></i> View All</button>
+            <button onclick="myPermissions()" class="btn btn-secondary"><i class="fas fa-user-tag"></i> My Permissions</button>
+          </div>
+          <div id="perms-table"></div>
+        </div>
+      </div>
+
+      <!-- AUDIT LOG -->
+      <div id="tab-audit" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-list-check"></i> Audit Log</h3>
+          <div class="toolbar">
+            <input id="audit-officer" type="number" placeholder="Officer ID">
+            <input id="audit-table-input" placeholder="Table name (e.g. Citizen)">
+            <select id="audit-action">
+              <option value="">All actions</option>
+              <option>INSERT</option><option>UPDATE</option><option>DELETE</option>
+              <option>VIEW</option><option>LOGIN</option><option>LOGOUT</option>
+            </select>
+            <button onclick="loadAuditLog()" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+          </div>
+          <div id="audit-table-div"></div>
+        </div>
+      </div>
+
+    </div><!-- end content-area -->
+
+    <div id="toast-container"></div>
+  </div><!-- end main -->
+
+</div><!-- end app-shell -->
+
+<a href="chatbot.html" class="fab-chatbot" title="Open AI Assistant">
+  <i class="fas fa-robot"></i>
+  <span class="fab-text">AI Assistant</span>
+</a>
+
+<script>
+// ── Minimal theme toggle for index.html (app.js handles everything else) ──
+function toggleTheme() {
+  // Theme toggling is handled by app.js — this stub prevents errors
+  // if app.js hasn't loaded yet. app.js will override this.
+}
+</script>
+<script src="app.js"></script>
+</body>
+</html>
