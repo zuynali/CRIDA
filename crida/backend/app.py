@@ -16,7 +16,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})  
+app.config["CORS_HEADERS"] = "Content-Type"
+CORS(app, resources={r"/api/v1/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}}, supports_credentials=False)
+
+@app.after_request
+def add_cors_headers(response):
+    origin = response.headers.get("Access-Control-Allow-Origin")
+    if not origin:
+        response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+    response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.setdefault("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+    response.headers.setdefault("Access-Control-Allow-Credentials", "false")
+    return response
+
 bcrypt = Bcrypt(app)
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads", "photos")

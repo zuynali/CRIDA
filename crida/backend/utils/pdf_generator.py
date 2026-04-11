@@ -26,16 +26,17 @@ except ImportError:
 
 # ── colour palette ───────────────────────────────────────────────────────────
 PK_GREEN   = HexColor('#01411C')
-DARK_NAVY  = HexColor('#1a2744')
-CARD_BG    = HexColor('#F5F7FA')
-FIELD_LINE = HexColor('#CCCCCC')
-LIGHT_GRAY = HexColor('#888888')
-PAGE_BG    = HexColor('#E8ECF2')
-ACCENT     = HexColor('#AACCEE')
-MID_BLUE   = HexColor('#6688AA')
+PK_DARK    = HexColor('#0B2F19')
+TEXT_COLOR = HexColor('#0B2F19')
+CARD_BG    = HexColor('#F7FBF6')
+FIELD_LINE = HexColor('#A7C4A2')
+LIGHT_GRAY = HexColor('#5F7B67')
+PAGE_BG    = HexColor('#E8F2E7')
+ACCENT     = HexColor('#72B084')
+MID_GREEN  = HexColor('#3F704E')
 
-# Translucent navy for watermark
-WATERMARK_COLOR = Color(0.1, 0.15, 0.27, alpha=0.07)   # very faint
+# Translucent green for watermark
+WATERMARK_COLOR = Color(0.06, 0.16, 0.08, alpha=0.08)   # very faint
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -180,7 +181,7 @@ def _field(c, label, value, lx, ly, width):
     c.setFillColor(LIGHT_GRAY)
     c.drawString(lx, ly, label)
     c.setFont("Helvetica-Bold", 8.5)
-    c.setFillColor(DARK_NAVY)
+    c.setFillColor(TEXT_COLOR)
     c.drawString(lx, ly - 4 * mm, str(value) if value else "-")
     c.setStrokeColor(FIELD_LINE)
     c.setLineWidth(0.4)
@@ -208,20 +209,24 @@ def _page_setup(buf):
 
 
 def _card_frame(c, x, y, w, h):
-    """White card background + navy border + markhor watermark."""
+    """White card background + green border + markhor watermark."""
     c.setFillColor(CARD_BG)
     c.roundRect(x, y, w, h, 8, stroke=0, fill=1)
 
-    c.setStrokeColor(DARK_NAVY)
+    _draw_markhor_watermark(c, x + w * 0.7, y + h * 0.55, h * 0.8)
+
+    c.setStrokeColor(PK_DARK)
     c.setLineWidth(1.5)
     c.roundRect(x, y, w, h, 8, stroke=1, fill=0)
 
 
 def _header_bar(c, x, y, w, h, subtitle):
-    """Navy header bar with Pakistan flag + title."""
+    """Pakistani green header bar with Pakistan flag + title."""
     header_h = h * 0.20
-    c.setFillColor(DARK_NAVY)
+    c.setFillColor(PK_GREEN)
     c.rect(x, y + h - header_h, w, header_h, stroke=0, fill=1)
+    c.setFillColor(ACCENT)
+    c.rect(x, y + h - header_h - 1.5 * mm, w, 1.5 * mm, stroke=0, fill=1)
 
     flag_cx = x + 22 * mm
     flag_cy = y + h - header_h / 2
@@ -247,18 +252,18 @@ def _header_bar(c, x, y, w, h, subtitle):
 
 
 def _bottom_bar(c, x, y, w):
-    """Navy bottom bar with Principal General signature + CRIDA text."""
+    """Green bottom bar with Principal General signature + CRIDA text."""
     bar_h = 10 * mm
-    c.setFillColor(DARK_NAVY)
+    c.setFillColor(PK_GREEN)
     c.rect(x, y, w, bar_h, stroke=0, fill=1)
 
     c.setFont("Helvetica-Bold", 6)
-    c.setFillColor(ACCENT)
+    c.setFillColor(white)
     c.drawString(x + 4 * mm, y + 6 * mm, "Principal General")
     _signature(c, x + 4 * mm, y + 3.5 * mm)
 
     c.setFont("Helvetica", 5.5)
-    c.setFillColor(MID_BLUE)
+    c.setFillColor(ACCENT)
     c.drawCentredString(x + w / 2, y + 6 * mm, "CRIDA Official Document")
     c.setFont("Helvetica", 5)
     c.drawCentredString(x + w / 2, y + 3 * mm, "Issued by: Govt. of Pakistan")
@@ -787,7 +792,7 @@ def generate_placeholder_pdf(message="Document not available"):
     c.setFillColor(PK_GREEN)
     c.drawCentredString(pw/2, ph/2 + 50, "CRIDA Document")
     c.setFont("Helvetica", 16)
-    c.setFillColor(DARK_NAVY)
+    c.setFillColor(TEXT_COLOR)
     c.drawCentredString(pw/2, ph/2, message)
     c.setFont("Helvetica", 12)
     c.setFillColor(LIGHT_GRAY)

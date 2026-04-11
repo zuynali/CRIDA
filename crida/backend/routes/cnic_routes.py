@@ -17,8 +17,13 @@ cnic_bp = Blueprint("cnic", __name__)
 
 
 def _generate_cnic_number(citizen_id):
-    """Generate a stable 13-digit CRIDA CNIC card number for a citizen."""
-    return str(9000000000000 + int(citizen_id))
+    """Return the citizen's existing national ID number, or fallback to a stable generated ID."""
+    citizen = execute_query(
+        "SELECT national_id_number FROM Citizen WHERE citizen_id = %s",
+        (citizen_id,), fetch='one')
+    if citizen and citizen.get("national_id_number"):
+        return str(citizen["national_id_number"])
+    return str(3000000000000 + int(citizen_id))
 
 
 @cnic_bp.route("/card/<int:cid>", methods=["GET"])

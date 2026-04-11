@@ -169,24 +169,30 @@ def approve_citizen_application(app_id):
     # The application does not carry a national_id_number until approval,
     # so we skip a duplicate NID check here and generate a new CNIC record.
     def ops(conn, cursor):
-        # Get next citizen_id to generate CNIC
-        cursor.execute("SELECT COALESCE(MAX(citizen_id), 0) + 1 AS next_id FROM Citizen")
-        next_id = cursor.fetchone()["next_id"]
-        card_number = str(9000000000000 + next_id)
+        # Generate the next sequential citizen ID and national ID number.
+        cursor.execute(
+            """SELECT
+                   COALESCE(MAX(citizen_id), 0) + 1 AS next_id,
+                   COALESCE(MAX(CAST(national_id_number AS UNSIGNED)), 3000000000000) + 1 AS next_nid
+               FROM Citizen""")
+        row = cursor.fetchone()
+        next_id = row["next_id"]
+        card_number = str(row["next_nid"])
 
         cursor.execute(
             """INSERT INTO Citizen
-               (national_id_number, first_name, last_name, dob, gender,
+               (citizen_id, national_id_number, first_name, last_name, dob, gender,
                 marital_status, blood_group, status)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')""",
             (
+                next_id,
                 card_number,
                 app["first_name"], app["last_name"],
                 app["dob"], app["gender"], app["marital_status"] or "Single",
                 app["blood_group"]
             )
         )
-        new_cid = cursor.lastrowid
+        new_cid = next_id
 
         cursor.execute(
             "INSERT INTO CNIC_Card"
@@ -214,10 +220,10 @@ def approve_citizen_application(app_id):
         cursor.execute(
             """UPDATE Citizen_Application
                SET status = 'Approved', citizen_id = %s,
-                   cnic_number = %s, reviewer_officer_id = %s,
-                   approved_at = CURRENT_TIMESTAMP
+                   national_id_number = %s, cnic_number = %s,
+                   reviewer_officer_id = %s, approved_at = CURRENT_TIMESTAMP
                WHERE application_id = %s""",
-            (new_cid, card_number, g.officer["officer_id"], app_id)
+            (new_cid, card_number, card_number, g.officer["officer_id"], app_id)
         )
 
         cursor.execute(
