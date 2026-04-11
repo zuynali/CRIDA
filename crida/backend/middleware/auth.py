@@ -44,6 +44,31 @@ def token_required(f):
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
 
+        # Citizen portal tokens are issued with role_name = Citizen.
+        if payload.get("role_name") == "Citizen":
+            citizen_id = payload.get("citizen_id") or payload.get("officer_id")
+            citizen = execute_query(
+                "SELECT citizen_id, first_name, last_name, national_id_number, status"
+                " FROM Citizen WHERE citizen_id = %s",
+                (citizen_id,), fetch='one'
+            )
+            if not citizen:
+                return jsonify({"error": "Citizen not found or inactive"}), 401
+            if citizen["status"] != "active":
+                return jsonify({"error": "Citizen record is not active"}), 403
+
+            g.officer = {
+                "officer_id": citizen["citizen_id"],
+                "citizen_id": citizen["citizen_id"],
+                "role_name": "Citizen",
+                "access_level": 0,
+                "full_name": f"{citizen['first_name']} {citizen['last_name']}".strip(),
+                "national_id_number": citizen["national_id_number"],
+                "status": citizen["status"],
+                "is_active": True
+            }
+            return f(*args, **kwargs)
+
         # Fetch live officer record (catches deactivated accounts)
         officer = execute_query(
             """SELECT o.officer_id, o.full_name, o.email,

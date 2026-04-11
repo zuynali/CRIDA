@@ -116,32 +116,44 @@ def citizen_login():
     """
     POST /api/v1/auth/citizen-login
     Body:    { "national_id_number": "1234567890123", "citizen_id": 7 }
+             or { "cnic_number": "1234567890123", "citizen_id": 7 }
     Returns: { "token": "eyJ...", "citizen": {...} }
 
-    Verifies that the NID + citizen_id pair matches the Citizen table.
-    Issues a JWT with role = "Citizen" accepted by @token_required.
+    Verifies that the NID or CNIC card number + citizen_id pair matches
+the Citizen table. Issues a JWT with role = "Citizen" accepted by @token_required.
     No officer account or DB changes needed.
     """
     data = request.json or {}
-    nid  = (data.get("national_id_number") or "").strip()
-    cid  = data.get("citizen_id")
+    nid   = (data.get("national_id_number") or "").strip()
+    cnic  = (data.get("cnic_number") or "").strip()
+    cid   = data.get("citizen_id")
 
-    if not nid or not cid:
-        return jsonify({"error": "national_id_number and citizen_id are required"}), 400
+    if not cid or (not nid and not cnic):
+        return jsonify({"error": "citizen_id and either national_id_number or cnic_number are required"}), 400
 
-    if not re.match(r'^\d{13}$', nid):
+    if nid and not re.match(r'^\d{13}$', nid):
         return jsonify({"error": "National ID must be exactly 13 digits"}), 400
+    if cnic and not re.match(r'^\d{13}$', cnic):
+        return jsonify({"error": "CNIC number must be exactly 13 digits"}), 400
 
-    # Verify NID + citizen_id pair exists
-    citizen = execute_query(
-        """SELECT citizen_id, first_name, last_name, national_id_number, status
-           FROM Citizen
-           WHERE citizen_id = %s AND national_id_number = %s""",
-        (cid, nid), fetch="one"
-    )
+    if cnic:
+        citizen = execute_query(
+            """SELECT c.citizen_id, c.first_name, c.last_name, c.national_id_number, c.status
+               FROM Citizen c
+               JOIN CNIC_Card cc ON c.citizen_id = cc.citizen_id
+               WHERE c.citizen_id = %s AND cc.card_number = %s""",
+            (cid, cnic), fetch='one'
+        )
+    else:
+        citizen = execute_query(
+            """SELECT citizen_id, first_name, last_name, national_id_number, status
+               FROM Citizen
+               WHERE citizen_id = %s AND national_id_number = %s""",
+            (cid, nid), fetch='one'
+        )
 
     if not citizen:
-        return jsonify({"error": "No matching citizen found. Check your NID and Citizen ID."}), 404
+        return jsonify({"error": "No matching citizen found. Check your credentials."}), 404
 
     if citizen["status"] == "deceased":
         return jsonify({"error": "This citizen record is marked as deceased."}), 403
@@ -149,16 +161,15 @@ def citizen_login():
     if citizen["status"] == "blacklisted":
         return jsonify({"error": "Access denied. Contact your nearest CRIDA office."}), 403
 
-    # Issue JWT — officer_id field reused as citizen_id so @token_required works
     secret = os.getenv("JWT_SECRET_KEY", Config.JWT_SECRET_KEY)
     expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
     token  = jwt.encode(
         {
-            "officer_id":  citizen["citizen_id"],
-            "role_name":   "Citizen",
+            "officer_id":   citizen["citizen_id"],
+            "role_name":    "Citizen",
             "access_level": 0,
-            "citizen_id":  citizen["citizen_id"],
-            "exp":         expiry,
+            "citizen_id":   citizen["citizen_id"],
+            "exp":          expiry,
         },
         secret,
         algorithm="HS256"

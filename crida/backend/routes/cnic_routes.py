@@ -14,10 +14,26 @@ cnic_bp = Blueprint("cnic", __name__)
 #                   rejection_reason
 # CNIC_Card: card_id, citizen_id (UNIQUE), card_number, issue_date, expiry_date,
 #            card_status, fingerprint_verified
-# NOTE: citizen_id is UNIQUE in CNIC_Card. Trigger create_cnic_card_on_approval
-#       fires AFTER UPDATE on CNIC_Application when status changes to 'Approved'.
-#       For Renewal/Replacement, the old card must be removed first so the trigger
-#       can INSERT a fresh one without hitting the UNIQUE constraint.
+
+
+def _generate_cnic_number(citizen_id):
+    """Generate a stable 13-digit CRIDA CNIC card number for a citizen."""
+    return str(9000000000000 + int(citizen_id))
+
+
+@cnic_bp.route("/card/<int:cid>", methods=["GET"])
+@token_required
+def get_cnic_card(cid):
+    if g.officer["role_name"] == "Citizen" and g.officer.get("citizen_id") != cid:
+        return jsonify({"error": "Access denied"}), 403
+
+    card = execute_query(
+        "SELECT * FROM CNIC_Card WHERE citizen_id = %s LIMIT 1",
+        (cid,), fetch='one'
+    )
+    if not card:
+        return jsonify({"error": "CNIC card not found"}), 404
+    return jsonify({"card": card}), 200
 
 
 @cnic_bp.route("/", methods=["GET"])
@@ -110,16 +126,24 @@ def approve_cnic(app_id):
         return jsonify({"error": f"Cannot approve application with status '{app['status']}'"}), 400
 
     def ops(conn, cursor):
-        # For Renewal/Replacement: the trigger (create_cnic_card_on_approval) does a plain
-        # INSERT into CNIC_Card, but citizen_id is UNIQUE there. Remove the old card
-        # first so the trigger can insert a fresh one without a duplicate-key error.
-        # This entire block is inside one transaction — if anything fails, the delete
-        # is rolled back too, leaving the old card intact.
         if app["application_type"] in ("Renewal", "Replacement"):
             cursor.execute(
                 "DELETE FROM CNIC_Card WHERE citizen_id = %s", (app["citizen_id"],))
 
-        # The trigger create_cnic_card_on_approval fires automatically on this UPDATE
+        cursor.execute(
+            "SELECT card_id FROM CNIC_Card WHERE citizen_id = %s",
+            (app["citizen_id"],)
+        )
+        existing = cursor.fetchone()
+        card_number = _generate_cnic_number(app["citizen_id"])
+
+        if not existing:
+            cursor.execute(
+                "INSERT INTO CNIC_Card (citizen_id, card_number, issue_date, expiry_date, card_status, fingerprint_verified)"
+                " VALUES (%s, %s, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 10 YEAR), 'Active', FALSE)",
+                (app["citizen_id"], card_number)
+            )
+
         cursor.execute(
             "UPDATE CNIC_Application SET status = 'Approved' WHERE application_id = %s",
             (app_id,))
