@@ -227,45 +227,109 @@
         </ul>
       </div>
       <div class="login-form-panel">
-        <h3>Identity Verification</h3>
-        <p class="subtitle">Enter your credentials to access your records</p>
-        <div class="form-group">
-          <label><i class="fas fa-id-card" style="margin-right:5px;opacity:.7"></i>National ID Number (13 digits)</label>
-          <input id="c-nid" type="text" maxlength="13" placeholder="1234567890123" autocomplete="off"
-                 oninput="this.value=this.value.replace(/\D/g,'')">
+        <div id="login-panel">
+          <h3>Identity Verification</h3>
+          <p class="subtitle">Enter your credentials to access your records</p>
+          <div class="form-group">
+            <label><i class="fas fa-id-card" style="margin-right:5px;opacity:.7"></i>National ID or CNIC Number (13 digits)</label>
+            <input id="c-nid" type="text" maxlength="13" placeholder="1234567890123" autocomplete="off"
+                   oninput="this.value=this.value.replace(/\D/g,'')">
+          </div>
+          <div class="form-group">
+            <label><i class="fas fa-hashtag" style="margin-right:5px;opacity:.7"></i>Citizen ID</label>
+            <input id="c-cid" type="number" placeholder="e.g. 7" min="1">
+          </div>
+          <div id="login-msg" class="msg"></div>
+          <button onclick="citizenLogin()" class="btn btn-primary btn-block" style="margin-top:14px">
+            <i class="fas fa-unlock-alt"></i> Access My Records
+          </button>
+          <div style="margin-top:18px;text-align:center;font-size:.82rem;color:var(--text-muted);">
+            New applicant? <a href="#" onclick="showRegistrationForm(event)" style="color:var(--green);font-weight:600;text-decoration:none;">Start a new application</a>
+            <br>Already applied? <a href="#" onclick="showStatusCheckForm(event)" style="color:var(--green);font-weight:600;text-decoration:none;">Check application status</a>
+          </div>
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);text-align:center">
+            <p style="font-size:.73rem;color:var(--text-muted)">
+              Are you a CRIDA officer? <a href="index.html" style="color:var(--green);font-weight:600">Officer Login →</a>
+            </p>
+          </div>
         </div>
-        <div class="form-group">
-          <label><i class="fas fa-hashtag" style="margin-right:5px;opacity:.7"></i>Citizen ID</label>
-          <input id="c-cid" type="number" placeholder="e.g. 7" min="1">
+
+        <div id="register-panel" style="display:none;">
+          <h3>New Citizen Application</h3>
+          <p class="subtitle">Complete your details and submit for officer review. Your National ID will be issued after approval.</p>
+          <div class="form-group"><label>First Name</label><input id="r-first" type="text" placeholder="First name"></div>
+          <div class="form-group"><label>Last Name</label><input id="r-last" type="text" placeholder="Last name"></div>
+          <div class="form-group"><label>Date of Birth</label><input id="r-dob" type="date"></div>
+          <div class="form-group"><label>Gender</label><select id="r-gender"><option value="">Select gender</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+          <div class="form-group"><label>Marital Status</label><select id="r-marital"><option value="Single">Single</option><option>Married</option><option>Divorced</option><option>Widowed</option></select></div>
+          <div class="form-group"><label>Blood Group</label><select id="r-blood"><option value="">Unknown</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+          <div class="form-group"><label>House / Apartment No.</label><input id="r-house" type="text" placeholder="House / apartment number"></div>
+          <div class="form-group"><label>Street</label><input id="r-street" type="text" placeholder="Street"></div>
+          <div class="form-group"><label>City</label><input id="r-city" type="text" placeholder="City"></div>
+          <div class="form-group"><label>Province</label><input id="r-province" type="text" placeholder="Province"></div>
+          <div class="form-group"><label>Postal Code</label><input id="r-postal" type="text" placeholder="Postal code"></div>
+          <div class="form-group"><label>Phone (optional)</label><input id="r-phone" type="text" maxlength="11" placeholder="03001234567" oninput="this.value=this.value.replace(/\D/g,'')"></div>
+          <div class="form-group"><label>Email (optional)</label><input id="r-email" type="email" placeholder="name@example.com"></div>
+          <button onclick="submitCitizenApplication()" class="btn btn-primary btn-block" style="margin-top:14px">
+            <i class="fas fa-file-alt"></i> Submit Application
+          </button>
+          <div id="apply-msg" class="msg"></div>
+          <div style="margin-top:18px;text-align:center">
+            <a href="#" onclick="showLoginForm(event)" style="color:var(--green);font-weight:600;text-decoration:none;">Back to login</a>
+          </div>
         </div>
-        <div id="login-msg" class="msg"></div>
-        <button onclick="citizenLogin()" class="btn btn-primary btn-block" style="margin-top:14px">
-          <i class="fas fa-unlock-alt"></i> Access My Records
-        </button>
-        <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);text-align:center">
-          <p style="font-size:.73rem;color:var(--text-muted)">
-            Are you a CRIDA officer? <a href="index.html" style="color:var(--green);font-weight:600">Officer Login →</a>
-          </p>
+
+        <div id="status-panel" style="display:none;">
+          <h3>Check Application Status</h3>
+          <p class="subtitle">Enter your details to view the current application stage.</p>
+          <div class="form-group"><label>First Name</label><input id="s-first" type="text" placeholder="First name"></div>
+          <div class="form-group"><label>Last Name</label><input id="s-last" type="text" placeholder="Last name"></div>
+          <div class="form-group"><label>Date of Birth</label><input id="s-dob" type="date"></div>
+          <button onclick="checkApplicationStatus()" class="btn btn-primary btn-block" style="margin-top:14px">
+            <i class="fas fa-search"></i> Check Status
+          </button>
+          <div id="status-msg" class="msg"></div>
+          <div id="status-details" style="display:none;margin-top:16px;padding:18px;border:1px solid var(--border);border-radius:12px;background:var(--off-white);">
+            <h4 style="margin-top:0;margin-bottom:12px;color:var(--green);">Application Details</h4>
+            <div id="status-content"></div>
+          </div>
+          <div style="margin-top:18px;text-align:center">
+            <a href="#" onclick="showLoginForm(event)" style="color:var(--green);font-weight:600;text-decoration:none;">Back to login</a>
+          </div>
+        </div>
         </div>
       </div>
     </div>
-  </div>
+    <div id="screen-portal" style="display:none;">
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-header">
+          <div class="card-icon"><i class="fas fa-user-circle"></i></div>
+          <h2>Citizen Portal</h2>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+            <span id="portal-user-name" style="font-weight:600;color:var(--text-mid)">Welcome</span>
+          </div>
+        </div>
+        <div class="nav-tabs" style="flex-wrap:wrap;gap:10px;">
+          <button class="nav-tab active" type="button" onclick="switchPanel('dashboard', this)"><i class="fas fa-chart-line"></i> Dashboard</button>
+          <button class="nav-tab" type="button" onclick="switchPanel('applications', this)"><i class="fas fa-file-alt"></i> Applications</button>
+          <button class="nav-tab" type="button" onclick="switchPanel('documents', this)"><i class="fas fa-file-pdf"></i> Documents</button>
+          <button class="nav-tab" type="button" onclick="switchPanel('family', this)"><i class="fas fa-sitemap"></i> Family</button>
+          <button class="nav-tab" type="button" onclick="switchPanel('notifications', this)"><i class="fas fa-bell"></i> Notifications</button>
+          <button class="nav-tab" type="button" onclick="switchPanel('complaints', this)"><i class="fas fa-comment-dots"></i> Complaints</button>
+          <button class="nav-tab" type="button" onclick="switchPanel('updates', this)"><i class="fas fa-edit"></i> Update Requests</button>
+          <span id="notif-dot" class="notif-dot" style="display:none;"></span>
+        </div>
+      </div>
 
-  <!-- PORTAL -->
-  <div id="screen-portal" style="display:none">
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="switchPanel('profile',this)"><i class="fas fa-user"></i> <span>My Profile</span></button>
-      <button class="nav-tab" onclick="switchPanel('applications',this)"><i class="fas fa-file-alt"></i> <span>Applications</span></button>
-      <button class="nav-tab" onclick="switchPanel('documents',this)"><i class="fas fa-file-pdf"></i> <span>Documents</span></button>
-      <button class="nav-tab" onclick="switchPanel('family',this)"><i class="fas fa-sitemap"></i> <span>Family</span></button>
-      <button class="nav-tab" onclick="switchPanel('notifications',this)"><i class="fas fa-bell"></i> <span>Alerts</span><span class="notif-dot" id="notif-dot"></span></button>
-      <button class="nav-tab" onclick="switchPanel('complaints',this)"><i class="fas fa-comment-dots"></i> <span>Complaints</span></button>
-      <button class="nav-tab" onclick="switchPanel('updates',this)"><i class="fas fa-edit"></i> <span>Update Info</span></button>
-    </div>
-
-    <!-- PROFILE -->
-    <div id="panel-profile" class="tab-panel active">
-      <div id="profile-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading your profile…</div></div>
+    <div id="panel-dashboard" class="tab-panel active">
+      <div id="profile-content" class="card"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+          <h2>My Dashboard</h2>
+        </div>
+        <div id="dashboard-summary"><div class="loading"><i class="fas fa-circle-notch"></i>Loading dashboard…</div></div>
+      </div>
     </div>
 
     <!-- APPLICATIONS -->
@@ -358,8 +422,8 @@
         <div id="updates-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
       </div>
     </div>
-
-  </div><!-- end portal -->
+  </div>
+</div><!-- end portal -->
 
   <div class="portal-footer">CRIDA &nbsp;·&nbsp; Citizen Registration &amp; Identity Database Authority &nbsp;·&nbsp; Government of Pakistan</div>
 </div>

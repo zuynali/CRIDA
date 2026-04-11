@@ -22,6 +22,11 @@ document.querySelectorAll("[data-tab]").forEach(link => {
     link.classList.add("active");
     document.getElementById("page-title").innerHTML =
       `<i class="${link.querySelector("i").className}"></i> ${link.textContent.trim()}`;
+    // Load tab-specific content
+    if (tab === "dashboard") loadDashboard();
+    else if (tab === "citizens") loadCitizens();
+    else if (tab === "applications") loadApplications();
+    // Add more as needed
   });
 });
 
@@ -44,14 +49,14 @@ function toggleTheme() {
   document.documentElement.setAttribute("data-theme", target);
   localStorage.setItem("crida_theme", target);
   
-  const icon = document.querySelector("#theme-toggle i");
+  const icon = document.getElementById("theme-icon");
   if(icon) {
     icon.className = target === "light" ? "fas fa-moon" : "fas fa-sun";
   }
 }
 
 window.addEventListener("DOMContentLoaded", () => {
-  const icon = document.querySelector("#theme-toggle i");
+  const icon = document.getElementById("theme-icon");
   if(icon) icon.className = savedTheme === "light" ? "fas fa-moon" : "fas fa-sun";
 });
 
@@ -103,6 +108,9 @@ async function doLogin() {
     toast("Welcome, " + OFFICER.full_name + "!", "ok");
     document.querySelector("[data-tab='dashboard']").click();
     loadDashboard();
+    if (["Admin", "Registrar"].includes(OFFICER.role_name)) {
+      loadApplications();
+    }
   } else {
     msg.className = "msg-box err";
     msg.textContent = r.data.error || "Login failed";
@@ -123,26 +131,77 @@ function logout() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 async function loadDashboard() {
-  const [cr, nr, ar] = await Promise.all([
-    req("GET", "/citizens/?limit=1"),
-    req("GET", "/notifications/unread-count"),
-    req("GET", "/audit/?limit=1")
-  ]);
-  const stats = [
-    { n: cr.ok ? (cr.data.total || "—") : "—", l: "Total Citizens" },
-    { n: OFFICER?.role_name || "—", l: "Your Role" },
-    { n: OFFICER?.access_level || "—", l: "Access Level" },
-    { n: nr.ok ? (nr.data.unread_count ?? "—") : "—", l: "Unread Alerts" },
-    { n: ar.ok ? (ar.data.total || "—") : "N/A", l: "Audit Entries" },
-    { n: "MySQL 8.0", l: "Database" },
-  ];
-  document.getElementById("stats-grid").innerHTML = stats.map(s =>
-    `<div class="stat-card">
-       <div class="number">${s.n}</div>
-       <div class="label">${s.l}</div>
-     </div>`
-  ).join("");
-  acidLog("Dashboard loaded — API health confirmed.");
+  try {
+    const r = await req("GET", "/citizens/stats");
+    if (!r.ok) {
+      toast("Failed to load dashboard stats", "err");
+      return;
+    }
+    const stats = r.data || {};
+
+    const renderChart = (canvasId, labels, values, colors) => {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx || !labels || !values || !labels.length || !values.some(v => v > 0)) {
+        if (canvas.parentElement) {
+          canvas.parentElement.innerHTML = `<div style="padding:34px 22px;text-align:center;color:var(--text-muted);font-size:.92rem;">No data available yet.</div>`;
+        }
+        return;
+      }
+
+      const existing = Chart.getChart(canvas);
+      if (existing) {
+        existing.destroy();
+      }
+
+      new Chart(ctx, {
+        type: "pie",
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: colors,
+            borderWidth: 2,
+            borderColor: "#ffffff"
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "bottom" },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed}` } }
+          }
+        }
+      });
+    };
+
+    renderChart(
+      "citizen-status-chart",
+      Object.keys(stats.citizen_status || {}),
+      Object.values(stats.citizen_status || {}),
+      ["#0a5c36", "#c0392b", "#d4860d", "#6b9c80"]
+    );
+    renderChart(
+      "citizen-gender-chart",
+      Object.keys(stats.citizen_gender || {}),
+      Object.values(stats.citizen_gender || {}),
+      ["#16a365", "#0d7a49", "#a0c8b4"]
+    );
+    renderChart(
+      "application-status-chart",
+      Object.keys(stats.application_status || {}),
+      Object.values(stats.application_status || {}),
+      ["#0a6641", "#d4860d", "#c0392b", "#6b9c80"]
+    );
+
+    acidLog("Dashboard charts loaded.");
+  } catch (e) {
+    toast(`Dashboard failed: ${e.message}`, "err");
+    document.querySelectorAll("#tab-dashboard .stats-card").forEach(card => {
+      if (card) card.innerHTML = `<div style="padding:34px 22px;text-align:center;color:var(--text-muted);font-size:.92rem;">Unable to load dashboard data.</div>`;
+    });
+  }
 }
 
 // ── Citizens ──────────────────────────────────────────────────────────────
@@ -170,6 +229,60 @@ async function loadCitizens(search = "") {
 
 async function searchCitizens() {
   await loadCitizens(document.getElementById("citizen-search").value);
+}
+
+// ── Applications ──────────────────────────────────────────────────────────
+async function loadApplications() {
+  const status = document.getElementById("app-status-filter").value;
+  const url = status ? `/citizens/applications?status=${status}&limit=50` : "/citizens/applications?limit=50";
+  const r = await req("GET", url);
+  const div = document.getElementById("applications-table");
+  if (!r.ok) { div.innerHTML = `<p style="color:var(--danger)">Error: ${r.data.error}</p>`; return; }
+  const apps = r.data.applications || [];
+  if (!apps.length) { div.innerHTML = "<p>No applications found.</p>"; return; }
+  div.innerHTML = `<table>
+    <tr><th>ID</th><th>Name</th><th>DOB</th><th>Gender</th><th>City</th><th>Status</th><th>Submitted</th><th>Actions</th></tr>
+    ${apps.map(a => `<tr>
+      <td><code>${a.application_id}</code></td>
+      <td>${a.first_name} ${a.last_name}</td>
+      <td>${a.dob}</td>
+      <td>${a.gender}</td>
+      <td>${a.city}, ${a.province}</td>
+      <td><span class="badge ${a.status === 'Approved' ? 'success' : a.status === 'Rejected' ? 'danger' : 'warning'}">${a.status}</span></td>
+      <td>${new Date(a.submission_date).toLocaleDateString()}</td>
+      <td>
+        ${a.status === 'Pending' ? `
+          <button onclick="approveApplication(${a.application_id})" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Approve</button>
+          <button onclick="rejectApplication(${a.application_id})" class="btn btn-danger btn-sm"><i class="fas fa-times"></i> Reject</button>
+        ` : a.status === 'Approved' ? 'Approved' : 'Rejected'}
+      </td>
+    </tr>`).join("")}
+  </table>`;
+}
+
+async function approveApplication(appId) {
+  if (!confirm("Approve this application? This will create a citizen record.")) return;
+  const r = await req("PUT", `/citizens/applications/${appId}/approve`);
+  if (r.ok) {
+    toast("Application approved!", "ok");
+    loadApplications();
+    acidLog(`Application ${appId} approved`);
+  } else {
+    toast(`Error: ${r.data.error}`, "err");
+  }
+}
+
+async function rejectApplication(appId) {
+  const reason = prompt("Rejection reason:");
+  if (!reason) return;
+  const r = await req("PUT", `/citizens/applications/${appId}/reject`, { reason });
+  if (r.ok) {
+    toast("Application rejected!", "ok");
+    loadApplications();
+    acidLog(`Application ${appId} rejected`);
+  } else {
+    toast(`Error: ${r.data.error}`, "err");
+  }
 }
 
 // ── PDF ───────────────────────────────────────────────────────────────────

@@ -35,7 +35,14 @@ async function req(method, path, body = null, asBlob = false) {
     if (!res.ok) throw new Error("Request failed: " + res.status);
     return res.blob();
   }
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (err) {
+    const cleanText = text.replace(/<[^>]*>/g, '').trim();
+    data = { error: cleanText ? cleanText.split('\n')[0] : `HTTP ${res.status}` };
+  }
   return { ok: res.ok, status: res.status, data };
 }
 
@@ -45,12 +52,14 @@ const _loaded = new Set();
 function switchPanel(name, btn) {
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".nav-tab").forEach(b => b.classList.remove("active"));
-  document.getElementById("panel-" + name).classList.add("active");
-  btn.classList.add("active");
+  const targetPanel = document.getElementById("panel-" + name);
+  if (targetPanel) targetPanel.classList.add("active");
+  if (btn) btn.classList.add("active");
 
   // Lazy-load once per panel
   if (!_loaded.has(name)) {
     _loaded.add(name);
+    if (name === "dashboard")     loadDashboardSummary();
     if (name === "applications")  loadApplications();
     if (name === "documents")     renderDocButtons();
     if (name === "family")        loadFamilyTree();
@@ -76,10 +85,13 @@ async function citizenLogin() {
 
   showMsg("login-msg", "Verifying identity…", "info");
 
-  const r = await req("POST", "/auth/citizen-login", {
-    national_id_number: nid,
-    citizen_id: cid
-  });
+  const loginPayload = { citizen_id: cid, national_id_number: nid };
+  let r = await req("POST", "/auth/citizen-login", loginPayload);
+
+  if (!r.ok && r.status === 404) {
+    // If the user entered a CNIC number instead of the national ID, retry explicitly.
+    r = await req("POST", "/auth/citizen-login", { citizen_id: cid, cnic_number: nid });
+  }
 
   if (r.ok) {
     TOKEN      = r.data.token;
@@ -98,19 +110,162 @@ async function citizenLogin() {
   }
 }
 
+function showRegistrationForm(evt) {
+  if (evt) evt.preventDefault();
+  document.getElementById("login-panel").style.display = "none";
+  document.getElementById("status-panel").style.display = "none";
+  document.getElementById("register-panel").style.display = "block";
+  document.getElementById("login-msg").className = "msg";
+  document.getElementById("status-msg").className = "msg";
+  document.getElementById("status-details").style.display = "none";
+}
+
+function showStatusCheckForm(evt) {
+  if (evt) evt.preventDefault();
+  document.getElementById("login-panel").style.display = "none";
+  document.getElementById("register-panel").style.display = "none";
+  document.getElementById("status-panel").style.display = "block";
+  document.getElementById("login-msg").className = "msg";
+  document.getElementById("apply-msg").className = "msg";
+}
+
+function showLoginForm(evt) {
+  if (evt) evt.preventDefault();
+  document.getElementById("register-panel").style.display = "none";
+  document.getElementById("status-panel").style.display = "none";
+  document.getElementById("login-panel").style.display = "block";
+  document.getElementById("apply-msg").className = "msg";
+  document.getElementById("status-msg").className = "msg";
+  document.getElementById("status-details").style.display = "none";
+}
+
+async function submitCitizenApplication() {
+  const data = {
+    first_name: document.getElementById("r-first").value.trim(),
+    last_name: document.getElementById("r-last").value.trim(),
+    dob: document.getElementById("r-dob").value,
+    gender: document.getElementById("r-gender").value,
+    marital_status: document.getElementById("r-marital").value,
+    blood_group: document.getElementById("r-blood").value,
+    house_no: document.getElementById("r-house").value.trim(),
+    street: document.getElementById("r-street").value.trim(),
+    city: document.getElementById("r-city").value.trim(),
+    province: document.getElementById("r-province").value.trim(),
+    postal_code: document.getElementById("r-postal").value.trim(),
+    phone: document.getElementById("r-phone").value.trim(),
+    email: document.getElementById("r-email").value.trim()
+  };
+
+  if (!data.first_name || !data.last_name || !data.dob || !data.gender || !data.city || !data.province) {
+    let missing = [];
+    if (!data.first_name) missing.push("First Name");
+    if (!data.last_name) missing.push("Last Name");
+    if (!data.dob) missing.push("Date of Birth");
+    if (!data.gender) missing.push("Gender");
+    if (!data.city) missing.push("City");
+    if (!data.province) missing.push("Province");
+    showMsg("apply-msg", `Please fill in the following required fields: ${missing.join(", ")}`, "err");
+    return;
+  }
+
+  showMsg("apply-msg", "Submitting your application…", "info");
+  try {
+    const r = await req("POST", "/citizens/apply", data);
+    if (r.ok) {
+      showMsg("apply-msg", "Application submitted successfully. An officer will review it shortly.", "ok");
+      document.getElementById("r-first").value = "";
+      document.getElementById("r-last").value = "";
+      document.getElementById("r-dob").value = "";
+      document.getElementById("r-gender").value = "";
+      document.getElementById("r-marital").value = "Single";
+      document.getElementById("r-blood").value = "";
+      document.getElementById("r-house").value = "";
+      document.getElementById("r-street").value = "";
+      document.getElementById("r-city").value = "";
+      document.getElementById("r-province").value = "";
+      document.getElementById("r-postal").value = "";
+      document.getElementById("r-phone").value = "";
+      document.getElementById("r-email").value = "";
+      toast("Registration application sent", "ok");
+    } else {
+      showMsg("apply-msg", r.data.error || "Could not submit the application.", "err");
+    }
+  } catch (e) {
+    showMsg("apply-msg", `Submission failed: ${e.message}`, "err");
+  }
+}
+
+async function checkApplicationStatus() {
+  const first = document.getElementById("s-first").value.trim();
+  const last = document.getElementById("s-last").value.trim();
+  const dob = document.getElementById("s-dob").value;
+
+  if (!first || !last || !dob) {
+    showMsg("status-msg", "Please enter your first name, last name, and date of birth.", "err");
+    return;
+  }
+
+  showMsg("status-msg", "Checking status…", "info");
+  try {
+    const r = await req("GET", `/citizens/applications/status?first_name=${encodeURIComponent(first)}&last_name=${encodeURIComponent(last)}&dob=${dob}`);
+    if (r.ok) {
+      const app = r.data.application;
+      let content = `
+        <p><strong>Status:</strong> <span class="badge ${app.status === 'Approved' ? 'badge-success' : app.status === 'Rejected' ? 'badge-danger' : 'badge-warning'}">${app.status}</span></p>
+        <p><strong>Submitted:</strong> ${app.submission_date ? new Date(app.submission_date).toLocaleDateString() : 'N/A'}</p>
+        <p><strong>Name:</strong> ${app.first_name} ${app.last_name}</p>
+      `;
+      if (app.status === 'Approved') {
+        content += `
+          <p><strong>Citizen ID:</strong> ${app.citizen_id}</p>
+          <p><strong>CNIC Number:</strong> ${app.cnic_number}</p>
+          <button onclick="fillLoginForm('${app.citizen_id}', '${app.cnic_number}')" class="btn btn-primary" style="margin-top:10px">
+            <i class="fas fa-sign-in-alt"></i> Login with these credentials
+          </button>
+        `;
+      } else if (app.status === 'Rejected') {
+        content += `<p><strong>Reason:</strong> ${app.rejection_reason || 'No reason provided'}</p>`;
+      }
+      document.getElementById("status-content").innerHTML = content;
+      document.getElementById("status-details").style.display = "block";
+      showMsg("status-msg", "Status retrieved.", "ok");
+    } else {
+      showMsg("status-msg", r.data.error || "Could not retrieve status.", "err");
+      document.getElementById("status-details").style.display = "none";
+    }
+  } catch (e) {
+    showMsg("status-msg", `Status lookup failed: ${e.message}`, "err");
+    document.getElementById("status-details").style.display = "none";
+  }
+}
+
+function fillLoginForm(cid, cnic) {
+  document.getElementById("c-cid").value = cid;
+  document.getElementById("c-nid").value = cnic;
+  showLoginForm();
+  toast("Credentials filled. Click 'Access My Records' to login.", "ok");
+}
+
 function showPortal() {
-  document.getElementById("screen-login").style.display  = "none";
-  document.getElementById("screen-portal").style.display = "block";
+  const loginScreen = document.getElementById("screen-login");
+  const portalScreen = document.getElementById("screen-portal");
+  if (loginScreen) loginScreen.style.display = "none";
+  if (portalScreen) portalScreen.style.display = "block";
+  const displayName = CITIZEN?.full_name || ((CITIZEN?.first_name||"") + " " + (CITIZEN?.last_name||"")).trim() || "Citizen";
   document.getElementById("header-user").innerHTML = `
     <a href="Landing.html" style="font-size:.75rem;color:var(--text-muted);text-decoration:none;display:flex;align-items:center;gap:5px;margin-right:8px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;transition:all .15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'"><i class='fas fa-home'></i> Home</a>
     <div class="user-pill">
       <div class="dot"></div>
-      <span>${CITIZEN?.full_name || ((CITIZEN?.first_name||"") + " " + (CITIZEN?.last_name||"")).trim() || "Citizen"}</span>
+      <span>${displayName}</span>
     </div>
     <button onclick="citizenLogout()" class="btn btn-secondary" style="padding:6px 12px;font-size:.76rem">
       <i class="fas fa-sign-out-alt"></i> Logout
     </button>
   `;
+  const portalUserName = document.getElementById("portal-user-name");
+  if (portalUserName) portalUserName.textContent = displayName;
+  const dashboardTab = document.querySelector(".nav-tab[onclick*='dashboard']") || document.querySelector(".nav-tab");
+  if (dashboardTab) switchPanel('dashboard', dashboardTab);
   loadProfile();
   loadUnreadCount();
 }
@@ -119,9 +274,17 @@ function citizenLogout() {
   TOKEN = null; CITIZEN_ID = null; CITIZEN = null;
   sessionStorage.removeItem("crida_citizen_token");
   sessionStorage.removeItem("crida_citizen_id");
-  document.getElementById("screen-portal").style.display = "none";
+  const portalScreen = document.getElementById("screen-portal");
+  if (portalScreen) portalScreen.style.display = "none";
   document.getElementById("screen-login").style.display  = "flex";
   document.getElementById("header-user").innerHTML = "";
+  document.getElementById("login-panel").style.display = "block";
+  document.getElementById("register-panel").style.display = "none";
+  document.getElementById("status-panel").style.display = "none";
+  document.getElementById("login-msg").className = "msg";
+  document.getElementById("apply-msg").className = "msg";
+  document.getElementById("status-msg").className = "msg";
+  document.getElementById("status-details").style.display = "none";
   _loaded.clear();
   toast("Logged out successfully.", "warn");
 }
@@ -151,7 +314,7 @@ window.addEventListener("load", async () => {
 // ── PROFILE ───────────────────────────────────────────────────────────────
 async function loadProfile() {
   const div = document.getElementById("profile-content");
-  div.innerHTML = `<div class="loading"><i class="fas fa-circle-notch"></i>Loading your profile…</div>`;
+  if (div) div.innerHTML = `<div class="loading"><i class="fas fa-circle-notch"></i>Loading your profile…</div>`;
 
   const r = await req("GET", `/citizens/${CITIZEN_ID}`);
   if (!r.ok) {
@@ -273,6 +436,52 @@ function renderDocButtons() {
       <div class="dc-btn"><i class="fas fa-download"></i> Download PDF</div>
     </div>
   `).join("");
+}
+
+async function loadDashboardSummary() {
+  const div = document.getElementById("dashboard-summary");
+  if (!div) return;
+  div.innerHTML = `<div class="loading"><i class="fas fa-circle-notch"></i>Loading dashboard summary…</div>`;
+
+  const [cnicR, passportR, licenseR, notifR] = await Promise.all([
+    req("GET", `/cnic/?citizen_id=${CITIZEN_ID}`),
+    req("GET", `/passports/?citizen_id=${CITIZEN_ID}`),
+    req("GET", `/licenses/?citizen_id=${CITIZEN_ID}`),
+    req("GET", `/notifications/unread-count?citizen_id=${CITIZEN_ID}`)
+  ]);
+
+  const cnicApps = cnicR.ok ? (cnicR.data.applications || []) : [];
+  const passportApps = passportR.ok ? (passportR.data.applications || []) : [];
+  const licenseApps = licenseR.ok ? (licenseR.data.applications || []) : [];
+  const unread = notifR.ok ? (notifR.data.unread_count || 0) : 0;
+
+  const totalApps = cnicApps.length + passportApps.length + licenseApps.length;
+  const latestApp = [...cnicApps, ...passportApps, ...licenseApps]
+    .sort((a,b) => new Date(b.submission_date) - new Date(a.submission_date))[0] || null;
+
+  div.innerHTML = `
+    <div class="profile-grid">
+      <div class="profile-field">
+        <div class="pf-label">Pending applications</div>
+        <div class="pf-value">${totalApps}</div>
+      </div>
+      <div class="profile-field">
+        <div class="pf-label">Unread notifications</div>
+        <div class="pf-value">${unread}</div>
+      </div>
+      <div class="profile-field">
+        <div class="pf-label">Last submitted</div>
+        <div class="pf-value">${latestApp ? String(latestApp.submission_date).substring(0, 10) : '—'}</div>
+      </div>
+      <div class="profile-field">
+        <div class="pf-label">Latest status</div>
+        <div class="pf-value">${latestApp ? latestApp.status : 'No applications yet'}</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;font-size:.88rem;color:var(--text-muted);">
+      This dashboard provides a quick overview of your submitted documents, unread notifications, and most recent application status.
+    </div>
+  `;
 }
 
 async function downloadPDF(path, label) {
