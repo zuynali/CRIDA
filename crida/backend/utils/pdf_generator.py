@@ -780,6 +780,23 @@ def generate_payment_slip_pdf(payment_id):
     return buf.getvalue()
 
 
+def generate_placeholder_pdf(message="Document not available"):
+    buf = BytesIO()
+    c, pw, ph = _page_setup(buf)
+    c.setFont("Helvetica-Bold", 24)
+    c.setFillColor(PK_GREEN)
+    c.drawCentredString(pw/2, ph/2 + 50, "CRIDA Document")
+    c.setFont("Helvetica", 16)
+    c.setFillColor(DARK_NAVY)
+    c.drawCentredString(pw/2, ph/2, message)
+    c.setFont("Helvetica", 12)
+    c.setFillColor(LIGHT_GRAY)
+    c.drawCentredString(pw/2, ph/2 - 30, "Please contact your nearest CRIDA office for assistance.")
+    _footer(c, pw, ph/2 - 100)
+    _render(c)
+    return buf.getvalue()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  STANDALONE TEST  (python pdf.py)
 # ═══════════════════════════════════════════════════════════════════════════
