@@ -166,6 +166,34 @@ CREATE TABLE CNIC_Card (
 );
 
 
+CREATE TABLE Citizen_Application (
+    application_id INT PRIMARY KEY AUTO_INCREMENT,
+    national_id_number VARCHAR(13) NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    dob DATE NOT NULL,
+    gender ENUM('Male','Female','Other') NOT NULL,
+    marital_status ENUM('Single','Married','Divorced','Widowed') DEFAULT 'Single',
+    blood_group ENUM('A+','A-','B+','B-','AB+','AB-','O+','O-') NULL,
+    house_no VARCHAR(20) NULL,
+    street VARCHAR(100) NULL,
+    city VARCHAR(50) NOT NULL,
+    province VARCHAR(50) NOT NULL,
+    postal_code VARCHAR(10) NULL,
+    phone VARCHAR(20) NULL,
+    email VARCHAR(100) NULL,
+    submission_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('Pending','Under Review','Approved','Rejected') DEFAULT 'Pending',
+    citizen_id INT NULL,
+    cnic_number VARCHAR(20) UNIQUE NULL,
+    reviewer_officer_id INT NULL,
+    rejection_reason VARCHAR(200) NULL,
+    approved_at DATETIME NULL,
+    FOREIGN KEY (citizen_id) REFERENCES Citizen(citizen_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (reviewer_officer_id) REFERENCES Officer(officer_id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+
 CREATE TABLE Passport_Application (
     passport_app_id INT PRIMARY KEY AUTO_INCREMENT,
     citizen_id INT NOT NULL,

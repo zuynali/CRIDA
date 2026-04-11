@@ -6,14 +6,21 @@
 
 -- 1. Temporarily relax password policy so 'crida_pass' is accepted
 
+-- 2. Create the CRID database if needed
+CREATE DATABASE IF NOT EXISTS CRID
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 
--- 2. Create application user
+-- 3. Create application user
 CREATE USER IF NOT EXISTS 'crida_user'@'localhost'
     IDENTIFIED BY 'crida_pass';
 GRANT ALL PRIVILEGES ON CRID.* TO 'crida_user'@'localhost';
 FLUSH PRIVILEGES;
 
 USE CRID;
+
+-- 4. Load the full schema from the repository root
+SOURCE ../schema.sql;
 
 -- ----------------------------------------------------------------
 -- 3. Permission table
