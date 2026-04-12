@@ -26,6 +26,14 @@ def _generate_cnic_number(citizen_id):
     return str(3000000000000 + int(citizen_id))
 
 
+def _generate_next_cnic_number(cursor):
+    cursor.execute(
+        """SELECT COALESCE(MAX(CAST(card_number AS UNSIGNED)), 3000000000099) + 1 AS next_cnic
+               FROM CNIC_Card""")
+    row = cursor.fetchone()
+    return str(row["next_cnic"])
+
+
 @cnic_bp.route("/card/<int:cid>", methods=["GET"])
 @token_required
 def get_cnic_card(cid):
@@ -256,6 +264,14 @@ def approve_cnic(app_id):
             cursor.execute(
                 "DELETE FROM CNIC_Card WHERE citizen_id = %s", (app["citizen_id"],))
 
+        card_number = _generate_next_cnic_number(cursor)
+        cursor.execute(
+            """INSERT INTO CNIC_Card
+               (citizen_id, card_number, issue_date, expiry_date)
+               VALUES (%s, %s, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 10 YEAR))""",
+            (app["citizen_id"], card_number)
+        )
+
         cursor.execute(
             "UPDATE CNIC_Application SET status = 'Approved' WHERE application_id = %s",
             (app_id,))
@@ -268,11 +284,12 @@ def approve_cnic(app_id):
             """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
                VALUES (%s, 'CNIC Approved', 'Your CNIC application has been approved and your CNIC is now active. You can download it from your portal.', 'success', 'document')""",
             (app["citizen_id"],))
-        return True
+        return card_number
 
-    execute_transaction_custom(ops)
+    card_number = execute_transaction_custom(ops)
     return jsonify({
-        "message": "CNIC application approved and CNIC card issued."
+        "message": "CNIC application approved and CNIC card issued.",
+        "card_number": card_number
     }), 200
 
 

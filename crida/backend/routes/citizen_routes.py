@@ -41,6 +41,21 @@ def list_citizens():
     return jsonify({"citizens": rows or [], "total": total["cnt"], "page": page, "limit": limit}), 200
 
 
+def _verify_citizen_sequence(cursor):
+    cursor.execute(
+        """SELECT MAX(citizen_id) AS max_id, MIN(citizen_id) AS min_id, COUNT(*) AS total
+               FROM Citizen""")
+    row = cursor.fetchone()
+    max_id = row["max_id"] or 0
+    min_id = row["min_id"] or 0
+    total = row["total"] or 0
+    if min_id != 1 or max_id != total:
+        raise ValueError(
+            "Citizen ID sequence is broken: there are gaps in Citizen IDs. "
+            "Please restore sequential IDs before approving new citizens."
+        )
+
+
 @citizen_bp.route("/apply", methods=["POST"])
 def apply_citizen():
     data = request.json or {}
@@ -198,32 +213,29 @@ def approve_citizen_application(app_id):
         return jsonify({"error": "Invalid date of birth format."}), 400
 
     def ops(conn, cursor):
-        # Generate the next sequential citizen ID and national ID number.
+        _verify_citizen_sequence(cursor)
+
+        # Generate the next sequential national ID number.
         cursor.execute(
             """SELECT
-                   COALESCE(MAX(citizen_id), 0) + 1 AS next_id,
-                   COALESCE(MAX(CAST(national_id_number AS UNSIGNED)), 3000000000000) + 1 AS next_nid
+                   COALESCE(MAX(CAST(national_id_number AS UNSIGNED)), 3000000000099) + 1 AS next_nid
                FROM Citizen""")
         row = cursor.fetchone()
-        next_id = row["next_id"]
-        # National ID is NOT the CNIC — it's just an identifier stored in Citizen table.
-        # CNIC must be applied for separately via /cnic/citizen-apply.
         national_id = str(row["next_nid"])
 
         cursor.execute(
             """INSERT INTO Citizen
-               (citizen_id, national_id_number, first_name, last_name, dob, gender,
+               (national_id_number, first_name, last_name, dob, gender,
                 marital_status, blood_group, status)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')""",
             (
-                next_id,
                 national_id,
                 app["first_name"], app["last_name"],
                 app["dob"], app["gender"], app["marital_status"] or "Single",
                 app["blood_group"]
             )
         )
-        new_cid = next_id
+        new_cid = cursor.lastrowid
 
         # Auto-create Birth Registration so the Birth Certificate PDF is immediately available.
         # registrar_officer_id = the approving officer; hospital_id is optional (NULL ok).
