@@ -105,6 +105,148 @@ def submit_license():
     return jsonify({"message": "License application submitted", "dl_app_id": new_id}), 201
 
 
+@license_bp.route("/citizen-apply", methods=["POST"])
+@token_required
+def citizen_apply_license():
+    import datetime as _dt
+    if g.officer.get("role_name") != "Citizen":
+        return jsonify({"error": "Only citizens can use this endpoint"}), 403
+
+    data = request.json or {}
+    citizen_id = g.officer["citizen_id"]
+    license_type = data.get("license_type", "Car")
+    office_id = data.get("office_id", 1)  # Default to Head Office
+
+    valid_types = ('Motorcycle', 'Car', 'Commercial', 'Heavy Vehicle')
+    if license_type not in valid_types:
+        return jsonify({"error": f"license_type must be one of {valid_types}"}), 400
+
+    # Age check: must be at least 18 years old for a Driving License
+    citizen = execute_query(
+        "SELECT dob FROM Citizen WHERE citizen_id = %s", (citizen_id,), fetch='one')
+    if citizen and citizen.get("dob"):
+        try:
+            dob = _dt.datetime.strptime(str(citizen["dob"])[:10], "%Y-%m-%d").date()
+            age_years = (_dt.date.today() - dob).days // 365
+            if age_years < 18:
+                return jsonify({"error": f"You must be at least 18 years old to apply for a Driving License. Your current age is {age_years} year(s)."}), 400
+        except ValueError:
+            pass
+
+    def ops(conn, cursor):
+        cursor.execute(
+            """INSERT INTO Driving_License_Application
+               (citizen_id, license_type, status, office_id)
+               VALUES (%s, %s, 'Pending', %s)""",
+            (citizen_id, license_type, office_id))
+        new_app_id = cursor.lastrowid
+
+        # Notify License_Officer / Admin about the new driving license application
+        cursor.execute(
+            """SELECT officer_id FROM Officer o
+               JOIN Role r ON o.role_id = r.role_id
+               WHERE r.role_name IN ('License_Officer', 'Admin') AND o.is_active = 1
+               LIMIT 5"""
+        )
+        officers = cursor.fetchall()
+        for off in (officers or []):
+            try:
+                cursor.execute(
+                    """INSERT INTO Notification (citizen_id, officer_id, title, message, notification_type, category)
+                       VALUES (NULL, %s, 'New Driving License Application', %s, 'info', 'document')""",
+                    (off["officer_id"],
+                     f"Citizen ID {citizen_id} has submitted a new Driving License ({license_type}) application. Please review it in the Officer Portal under Doc Applications.")
+                )
+            except Exception:
+                pass
+        return new_app_id
+
+    new_id = execute_transaction_custom(ops)
+    return jsonify({"message": "License application submitted", "dl_app_id": new_id}), 201
+
+
+@license_bp.route("/<int:app_id>/request-biometric", methods=["PUT"])
+@token_required
+def request_biometric_license(app_id):
+    """Move to 'Test Scheduled'. Allowed for License_Officer and Admin by role."""
+    if g.officer.get("role_name") not in ("Admin", "License_Officer"):
+        return jsonify({"error": "Only License_Officer or Admin can schedule a test visit"}), 403
+    app = execute_query(
+        "SELECT * FROM Driving_License_Application WHERE dl_app_id = %s", (app_id,), fetch='one')
+    if not app:
+        return jsonify({"error": "Application not found"}), 404
+    if app["status"] not in ("Pending", "Test Scheduled"):
+        return jsonify({"error": f"Cannot start biometric/test process from '{app['status']}'"}), 400
+
+    def ops(conn, cursor):
+        cursor.execute(
+            "UPDATE Driving_License_Application SET status = 'Test Scheduled' WHERE dl_app_id = %s",
+            (app_id,))
+        cursor.execute(
+            """INSERT INTO Audit_Log
+               (officer_id, action_type, table_name, record_id, ip_address)
+               VALUES (%s, 'UPDATE', 'Driving_License_Application', %s, %s)""",
+            (g.officer["officer_id"], app_id, request.remote_addr))
+        cursor.execute(
+            """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
+               VALUES (%s, 'Biometric & Test Visit Required', 'Your Driving License application has been reviewed. Please visit your nearest CRIDA office for biometric capture and driving test.', 'info', 'appointment')""",
+            (app["citizen_id"],))
+        return True
+
+    execute_transaction_custom(ops)
+    return jsonify({"message": "Application moved to Test Scheduled — citizen notified to visit office."}), 200
+
+
+@license_bp.route("/<int:app_id>/submit-to-admin", methods=["PUT"])
+@token_required
+def submit_to_admin_license(app_id):
+    """After biometric/test captured, set status to Test Passed and then issue the license.
+    This is the 'Done — Submit to Admin' step in the officer workflow.
+    """
+    app = execute_query(
+        "SELECT * FROM Driving_License_Application WHERE dl_app_id = %s", (app_id,), fetch='one')
+    if not app:
+        return jsonify({"error": "Application not found"}), 404
+    if app["status"] not in ("Test Scheduled",):
+        return jsonify({"error": f"Application must be Test Scheduled. Current: '{app['status']}'"}), 400
+
+    today = datetime.date.today()
+    expiry = _add_years(today, 5)
+    license_number = f"DL{app_id:07d}"
+    citizen_id = app["citizen_id"]
+    license_type = app["license_type"]
+
+    def ops(conn, cursor):
+        # Transition through Test Passed then directly Approved + issue license
+        cursor.execute(
+            """UPDATE Driving_License_Application
+               SET test_result = 'Pass', status = 'Test Passed', test_date = %s
+               WHERE dl_app_id = %s""",
+            (str(today), app_id))
+        cursor.execute(
+            """INSERT INTO Driving_License
+               (citizen_id, license_number, issue_date, expiry_date, license_type, status)
+               VALUES (%s, %s, %s, %s, %s, 'Valid')""",
+            (citizen_id, license_number, today, expiry, license_type))
+        license_id = cursor.lastrowid
+        cursor.execute(
+            "UPDATE Driving_License_Application SET status = 'Approved' WHERE dl_app_id = %s",
+            (app_id,))
+        cursor.execute(
+            """INSERT INTO Audit_Log
+               (officer_id, action_type, table_name, record_id, ip_address)
+               VALUES (%s, 'INSERT', 'Driving_License', %s, %s)""",
+            (g.officer["officer_id"], license_id, request.remote_addr))
+        cursor.execute(
+            """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
+               VALUES (%s, 'Driving License Approved', 'Your driving license application has been approved and your license is now active. You can download it from your portal.', 'success', 'document')""",
+            (citizen_id,))
+        return license_id
+
+    license_id = execute_transaction_custom(ops)
+    return jsonify({"message": "Driving license issued successfully.", "license_id": license_id}), 200
+
+
 @license_bp.route("/<int:app_id>/schedule-test", methods=["PUT"])
 @token_required
 @permission_required("manage_license")
@@ -176,24 +318,21 @@ def record_test_result(app_id):
 @permission_required("manage_license")
 def issue_license(app_id):
     """
-    ACID: Verify Test Passed → Insert Driving_License → Update app status → Audit_Log
-    All steps in one transaction — any failure rolls back entirely.
+    Final Admin approval: issues the Driving License and marks application Approved.
+    Application must be in 'Pending Admin Approval' state.
     """
     def ops(conn, cursor):
-        # Step 1: verify test passed
         cursor.execute(
-            "SELECT * FROM Driving_License_Application WHERE dl_app_id = %s AND status = 'Test Passed'",
+            "SELECT * FROM Driving_License_Application WHERE dl_app_id = %s AND status = 'Pending Admin Approval'",
             (app_id,))
         app = cursor.fetchone()
         if not app:
-            raise ValueError("Application not found or test not passed")
+            raise ValueError("Application not found or not in Pending Admin Approval state")
 
         citizen_id = app["citizen_id"]
         license_type = app["license_type"]
-
-        # Step 2: insert Driving_License
         today = datetime.date.today()
-        expiry = _add_years(today, 5)   # safely handles Feb-29
+        expiry = _add_years(today, 5)
         license_number = f"DL{app_id:07d}"
 
         cursor.execute(
@@ -203,18 +342,18 @@ def issue_license(app_id):
             (citizen_id, license_number, today, expiry, license_type))
         license_id = cursor.lastrowid
 
-        # Step 3: update application status to Approved
         cursor.execute(
             "UPDATE Driving_License_Application SET status = 'Approved' WHERE dl_app_id = %s",
             (app_id,))
-
-        # Step 4: audit log
         cursor.execute(
             """INSERT INTO Audit_Log
                (officer_id, action_type, table_name, record_id, ip_address)
                VALUES (%s, 'INSERT', 'Driving_License', %s, %s)""",
             (g.officer["officer_id"], license_id, request.remote_addr))
-
+        cursor.execute(
+            """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
+               VALUES (%s, 'Driving License Approved', 'Your driving license application has been approved and your license is now active. You can download it from your portal.', 'success', 'document')""",
+            (citizen_id,))
         return license_id
 
     try:
@@ -226,12 +365,17 @@ def issue_license(app_id):
 
 @license_bp.route("/<int:app_id>/reject", methods=["PUT"])
 @token_required
-@permission_required("manage_license")
 def reject_license(app_id):
+    """Any authenticated officer (non-Citizen) may reject a License application."""
+    if g.officer.get("role_name") == "Citizen":
+        return jsonify({"error": "Citizens cannot perform this action"}), 403
+    data = request.json or {}
     app = execute_query(
         "SELECT * FROM Driving_License_Application WHERE dl_app_id = %s", (app_id,), fetch='one')
     if not app:
         return jsonify({"error": "Application not found"}), 404
+    if app["status"] in ("Approved",):
+        return jsonify({"error": "Cannot reject an already approved application"}), 400
 
     def ops(conn, cursor):
         cursor.execute(
@@ -242,6 +386,16 @@ def reject_license(app_id):
                (officer_id, action_type, table_name, record_id, ip_address)
                VALUES (%s, 'UPDATE', 'Driving_License_Application', %s, %s)""",
             (g.officer["officer_id"], app_id, request.remote_addr))
+        # Notify citizen
+        try:
+            cursor.execute(
+                """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
+                   VALUES (%s, 'Driving License Application Rejected', %s, 'error', 'document')""",
+                (app["citizen_id"],
+                 f"Your Driving License application has been rejected. Reason: {data.get('reason', 'No reason provided')}")
+            )
+        except Exception:
+            pass
         return True
 
     execute_transaction_custom(ops)

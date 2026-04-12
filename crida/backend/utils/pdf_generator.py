@@ -702,9 +702,8 @@ def generate_death_certificate_pdf(citizen_id):
 def generate_marriage_certificate_pdf(citizen_id):
     """
     Generate the marriage certificate for a given citizen.
-    Looks up the most recent Marriage_Registration where the citizen is
-    either the husband or the wife, matching the schema constraints
-    (husband must be Male, wife must be Female).
+    First checks Marriage_Registration. If not found, falls back to
+    Family_Relationship so long as both spouses have an active CNIC.
     """
     m = execute_query(
         """SELECT mr.*,
@@ -717,15 +716,49 @@ def generate_marriage_certificate_pdf(citizen_id):
            ORDER BY mr.marriage_id DESC
            LIMIT 1""",
         (citizen_id, citizen_id), fetch='one')
-    if not m: raise ValueError(f"No marriage registration found for citizen {citizen_id}")
 
-    fields = [
-        ("Husband",        m["husband_name"],                        "full"),
-        ("Wife",           m["wife_name"],                           "full"),
-        ("Marriage Date",  str(m["marriage_date"]),                  "left"),
-        ("Reg Date",       str(m["registration_date"]),              "right"),
-        ("Certificate No", m["marriage_certificate_number"] or "-",  "full"),
-    ]
+    if m:
+        fields = [
+            ("Husband",        m["husband_name"],                        "full"),
+            ("Wife",           m["wife_name"],                           "full"),
+            ("Marriage Date",  str(m["marriage_date"]),                  "left"),
+            ("Reg Date",       str(m["registration_date"]),              "right"),
+            ("Certificate No", m["marriage_certificate_number"] or "-",  "full"),
+        ]
+    else:
+        # Fallback: Check Family_Relationship for Husband/Wife
+        fr = execute_query(
+            """SELECT fr.*,
+                      c1.gender as c1_gender, CONCAT(c1.first_name, ' ', c1.last_name) as c1_name,
+                      c2.gender as c2_gender, CONCAT(c2.first_name, ' ', c2.last_name) as c2_name
+               FROM Family_Relationship fr
+               JOIN Citizen c1 ON fr.citizen_id = c1.citizen_id
+               JOIN Citizen c2 ON fr.related_citizen_id = c2.citizen_id
+               WHERE (fr.citizen_id = %s OR fr.related_citizen_id = %s)
+                 AND fr.relationship_type IN ('Husband', 'Wife')
+               LIMIT 1""",
+            (citizen_id, citizen_id), fetch='one')
+            
+        if not fr:
+            raise ValueError(f"No marriage record found for citizen {citizen_id}")
+
+        # Both must have Active CNIC
+        cp1 = execute_query("SELECT has_active_cnic FROM CitizenProfile_View WHERE citizen_id=%s", (fr["citizen_id"],), fetch='one')
+        cp2 = execute_query("SELECT has_active_cnic FROM CitizenProfile_View WHERE citizen_id=%s", (fr["related_citizen_id"],), fetch='one')
+
+        if not cp1 or not cp2 or cp1.get("has_active_cnic") != "Yes" or cp2.get("has_active_cnic") != "Yes":
+            raise ValueError("Marriage Certificate Generation Failed: Both spouses must hold an active CNIC.")
+
+        hus_name = fr["c1_name"] if fr["c1_gender"] == "Male" else fr["c2_name"]
+        wife_name = fr["c2_name"] if fr["c2_gender"] == "Female" else fr["c1_name"]
+
+        fields = [
+            ("Husband",        hus_name,          "full"),
+            ("Wife",           wife_name,         "full"),
+            ("Marriage Date",  "N/A",             "left"),
+            ("Reg Date",       str(date.today()), "right"),
+            ("Certificate No", f"MC-FAM-{fr['relationship_id']}", "full"),
+        ]
 
     buf = BytesIO()
     c, pw, ph = _page_setup(buf)

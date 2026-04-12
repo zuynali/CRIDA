@@ -26,6 +26,7 @@ document.querySelectorAll("[data-tab]").forEach(link => {
     if (tab === "dashboard") loadDashboard();
     else if (tab === "citizens") loadCitizens();
     else if (tab === "applications") loadApplications();
+    else if (tab === "doc-applications") loadDocApplications();
     // Add more as needed
   });
 });
@@ -231,7 +232,7 @@ async function searchCitizens() {
   await loadCitizens(document.getElementById("citizen-search").value);
 }
 
-// ── Applications ──────────────────────────────────────────────────────────
+// ── Applications (Citizen Registration) ──────────────────────────────────
 async function loadApplications() {
   const status = document.getElementById("app-status-filter").value;
   const url = status ? `/citizens/applications?status=${status}&limit=50` : "/citizens/applications?limit=50";
@@ -285,6 +286,202 @@ async function rejectApplication(appId) {
   }
 }
 
+// ── Document Applications (CNIC / Passport / License) ────────────────────
+async function loadDocApplications() {
+  const role = OFFICER?.role_name || "";
+  const div = document.getElementById("doc-applications-table");
+  if (!div) return;
+  div.innerHTML = `<div style="padding:18px;color:var(--text-muted)"><i class="fas fa-circle-notch fa-spin"></i> Loading…</div>`;
+
+  // Fetch all three types in parallel
+  const [cnicR, passR, dlR] = await Promise.all([
+    req("GET", "/cnic/?limit=100"),
+    req("GET", "/passports/?limit=100"),
+    req("GET", "/licenses/?limit=100")
+  ]);
+
+  let rows = [];
+
+  // Role-based filtering: Passport_Officer sees passports only,
+  // others (Registrar/Admin/License_Officer) see CNIC+DL, Admin sees all.
+  const isAdmin          = role === "Admin";
+  const isPassportOff    = role === "Passport_Officer";
+  const isLicenseOff     = role === "License_Officer";
+  const isRegistrar      = role === "Registrar";
+
+  if (cnicR.ok && (isAdmin || isRegistrar)) {
+    (cnicR.data.applications || []).forEach(a =>
+      rows.push({ ...a, doc_type: "CNIC", app_id: a.application_id, id_field: "application_id" }));
+  }
+  if (passR.ok && (isAdmin || isPassportOff)) {
+    (passR.data.applications || []).forEach(a =>
+      rows.push({ ...a, doc_type: "Passport", app_id: a.passport_app_id, id_field: "passport_app_id" }));
+  }
+  if (dlR.ok && (isAdmin || isLicenseOff || isRegistrar)) {
+    (dlR.data.applications || []).forEach(a =>
+      rows.push({ ...a, doc_type: "License", app_id: a.dl_app_id, id_field: "dl_app_id" }));
+  }
+
+  // Sort newest first
+  rows.sort((a, b) => new Date(b.submission_date) - new Date(a.submission_date));
+
+  if (!rows.length) {
+    div.innerHTML = "<p style='padding:18px'>No document applications found for your role.</p>";
+    return;
+  }
+
+  const sc = s => {
+    if (!s) return "warning";
+    const sl = s.toLowerCase();
+    if (sl.includes("approved") || sl.includes("collected")) return "success";
+    if (sl.includes("reject")) return "danger";
+    return "warning";
+  };
+
+  const actionBtns = (a) => {
+    const s = a.status;
+    const type = a.doc_type.toLowerCase().replace(" ", "");
+    const id = a.app_id;
+    const cid = a.citizen_id;
+
+    // ── CNIC flow: Pending → Under Review (biometric) → Approved (trigger creates card) ──
+    // ── License flow: Pending → Test Scheduled (visit) → Test Passed + Approved (license issued) ──
+    // ── Passport flow: Submitted/Under Review → Pending Biometric → Pending Admin Approval → Approved ──
+    // Only request a visit if we are at the very beginning of the pipeline
+    const canRequestVisit = (
+      (type === 'cnic' && s === 'Pending') ||
+      (type === 'drivinglicense' && s === 'Pending') ||
+      (type === 'passport' && s === 'Submitted')
+    );
+    const canFinalize = (
+      (type === 'cnic' && s === 'Under Review') ||
+      (type === 'drivinglicense' && s === 'Test Scheduled') ||
+      (type === 'passport' && s === 'Pending Biometric')
+    );
+    const isAdminFinalStep = (s === 'Pending Admin Approval' && isAdmin);
+    const isFinalDone = (s === 'Approved' || s === 'Rejected' || s === 'Test Passed' || s === 'Test Failed');
+
+    if (isFinalDone) {
+      return `<span style="font-size:.75rem;color:var(--text-muted)">${s}</span>`;
+    }
+    if (isAdminFinalStep) {
+      return `<button onclick="docFinalApprove('${type}',${id})" class="btn btn-sm btn-success" style="font-size:.72rem">
+                <i class="fas fa-check-double"></i> Final Approve
+              </button>
+              <button onclick="docReject('${type}',${id})" class="btn btn-sm btn-danger" style="font-size:.72rem">
+                <i class="fas fa-times"></i> Reject
+              </button>`;
+    }
+    if (s === 'Pending Admin Approval') {
+      return `<span style="font-size:.75rem;color:var(--text-muted)"><i class="fas fa-hourglass-half"></i> Awaiting Admin</span>`;
+    }
+    if (canFinalize && !canRequestVisit) {
+      // Officer has already requested the visit — show the finalize step only
+      const stepLabel = type === 'drivinglicense' ? 'Issue License' : 'Submit to Admin';
+      return `
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:2px">
+            <i class="fas fa-info-circle"></i> Citizen visited office. Finalize:
+          </div>
+          <button onclick="goToBiometric(${cid})" class="btn btn-sm btn-secondary" style="font-size:.72rem;background:var(--green-deep);border-color:var(--green-deep);color:#fff">
+            <i class="fas fa-camera"></i> 1. Capture Biometric (Citizen ID: ${cid})
+          </button>
+          <button onclick="docSubmitToAdmin('${type}',${id})" class="btn btn-sm btn-secondary" style="font-size:.72rem;background:var(--gold);color:#000;border-color:var(--gold)">
+            <i class="fas fa-check"></i> 2. Done — ${stepLabel}
+          </button>
+          <button onclick="docReject('${type}',${id})" class="btn btn-sm btn-danger" style="font-size:.72rem">
+            <i class="fas fa-times"></i> Reject
+          </button>
+        </div>`;
+    }
+    // Default: first-step — request visit/biometric
+    const visitLabel = type === 'drivinglicense' ? '<i class="fas fa-car"></i> Schedule Test Visit' : '<i class="fas fa-fingerprint"></i> Request Biometric';
+    return `<button onclick="docRequestBiometric('${type}',${id},${cid})" class="btn btn-sm btn-secondary" style="font-size:.72rem">
+              ${visitLabel}
+            </button>
+            <button onclick="docReject('${type}',${id})" class="btn btn-sm btn-danger" style="font-size:.72rem">
+              <i class="fas fa-times"></i> Reject
+            </button>`;
+  };
+
+  div.innerHTML = `<table style="margin-top:8px">
+    <tr><th>Type</th><th>App ID</th><th>Citizen ID</th><th>Citizen Name</th><th>Sub-type</th><th>Submitted</th><th>Status</th><th>Actions</th></tr>
+    ${rows.map(a => `<tr>
+      <td><span class="badge ${a.doc_type==='CNIC'?'success':a.doc_type==='Passport'?'warning':''}">
+            <i class="fas ${a.doc_type==='CNIC'?'fa-id-card':a.doc_type==='Passport'?'fa-passport':'fa-car'}" style="margin-right:4px"></i>${a.doc_type}
+          </span></td>
+      <td><code>${a.app_id}</code></td>
+      <td><code style="color:var(--green)">${a.citizen_id}</code></td>
+      <td>${a.citizen_name || '—'}</td>
+      <td>${a.application_type || a.license_type || '—'}</td>
+      <td>${String(a.submission_date).substring(0,10)}</td>
+      <td><span class="badge ${sc(a.status)}">${a.status}</span></td>
+      <td style="min-width:220px">${actionBtns(a)}</td>
+    </tr>`).join("")}
+  </table>`;
+}
+
+async function docRequestBiometric(type, id, cid) {
+  const endpoints = { cnic: `/cnic/${id}/request-biometric`, passport: `/passports/${id}/request-biometric`, license: `/licenses/${id}/request-biometric` };
+  const r = await req("PUT", endpoints[type]);
+  if (r.ok) { 
+    toast("Biometric requested — citizen will be notified to visit the office!", "ok"); 
+    loadDocApplications();
+    // Redirect to biometric tab directly and pre-fill the citizen ID
+    if (cid) goToBiometric(cid);
+  }
+  else toast(`Error: ${r.data.error || r.status}`, "err");
+}
+
+// Navigate to the Biometric tab and pre-fill the citizen ID so the officer
+// can immediately capture the face photo and fingerprint for this application.
+function goToBiometric(citizenId) {
+  // Switch to the biometric tab
+  const bioTab = document.querySelector("[data-tab='biometric']");
+  if (bioTab) bioTab.click();
+
+  // Pre-fill the citizen ID field
+  setTimeout(() => {
+    const cidField = document.getElementById("bio-cid");
+    if (cidField) {
+      cidField.value = citizenId;
+      cidField.dispatchEvent(new Event("input"));
+    }
+    toast(`Biometric tab opened — Citizen ID ${citizenId} pre-filled. Start the camera and capture face + fingerprint, then return to Doc Applications and click "Done — Submit to Admin".`, "ok");
+  }, 200);
+}
+
+async function docSubmitToAdmin(type, id) {
+  const endpoints = { cnic: `/cnic/${id}/submit-to-admin`, passport: `/passports/${id}/submit-to-admin`, license: `/licenses/${id}/submit-to-admin` };
+  const r = await req("PUT", endpoints[type]);
+  if (r.ok) { toast("Submitted to Admin for final approval!", "ok"); loadDocApplications(); }
+  else toast(`Error: ${r.data.error || r.status}`, "err");
+}
+
+async function docFinalApprove(type, id) {
+  if (!confirm("Grant FINAL approval? This will issue the document and make it downloadable for the citizen.")) return;
+  const endpoints = {
+    cnic:     `/cnic/${id}/approve`,
+    passport: `/passports/${id}/approve`,
+    license:  `/licenses/${id}/issue`
+  };
+  const method = type === "license" ? "POST" : "PUT";
+  const r = await req(method, endpoints[type]);
+  if (r.ok) { toast("Document approved and issued!", "ok"); loadDocApplications(); acidLog(`Doc ${type.toUpperCase()} #${id} — FINAL APPROVED`); }
+  else toast(`Error: ${r.data.error || r.status}`, "err");
+}
+
+async function docReject(type, id) {
+  const reason = prompt("Rejection reason:");
+  if (!reason) return;
+  const endpoints = { cnic: `/cnic/${id}/reject`, passport: `/passports/${id}/reject`, license: `/licenses/${id}/reject` };
+  const r = await req("PUT", endpoints[type], { reason });
+  if (r.ok) { toast("Application rejected", "warn"); loadDocApplications(); }
+  else toast(`Error: ${r.data.error || r.status}`, "err");
+}
+
+
+
 // ── PDF ───────────────────────────────────────────────────────────────────
 async function generatePDF() {
   const type = document.getElementById("pdf-type").value;
@@ -325,6 +522,8 @@ function renderTree(data) {
   const parents = [], children = [], siblings = [], others = [];
   const seen = new Set();
 
+  let customSpouse = null;
+
   [
     ...(data.relationships || []).map(r => ({ ...r, _rel: r.relationship_type })),
     ...(data.reverse_relations || []).map(r => ({ ...r, _rel: r.relationship_type }))
@@ -335,12 +534,14 @@ function renderTree(data) {
     if (['Father', 'Mother', 'Grandfather', 'Grandmother'].includes(rel)) parents.push(r);
     else if (['Son', 'Daughter', 'Child', 'Grandson', 'Granddaughter'].includes(rel)) children.push(r);
     else if (['Brother', 'Sister', 'Sibling', 'Brother-in-law', 'Sister-in-law'].includes(rel)) siblings.push(r);
-    else if (['Husband', 'Wife', 'Spouse'].includes(rel)) { /* handled by spouse section */ }
+    else if (['Husband', 'Wife', 'Spouse'].includes(rel)) {
+      if (!customSpouse) customSpouse = { citizen_id: r.citizen_id, full_name: r.full_name, _rel: rel };
+    }
     else others.push(r);
   });
 
   const root = data.citizen;
-  const spouse = data.spouse;
+  const spouse = data.spouse || customSpouse;
   let html = `<div class="ft-tree">`;
 
   if (parents.length) {
@@ -372,12 +573,14 @@ function renderTree(data) {
     </div>`;
 
   if (spouse) {
-    const spouseRel = root.gender === 'Male' ? 'Wife' : 'Husband';
+    const spouseRel = spouse._rel || (root.gender === 'Male' ? 'Wife' : 'Husband');
+    const spouseId = spouse.spouse_id || spouse.citizen_id;
+    const spouseName = spouse.spouse_name || spouse.full_name;
     html += `
       <div style="width:25px;height:2px;background:#EF9F27"></div>
       <div style="display:flex;flex-direction:column;align-items:center">
         <div class="ft-section-label">${spouseRel}</div>
-        ${personNode({ citizen_id: spouse.spouse_id, full_name: spouse.spouse_name, _rel: spouseRel }, spouseRel, false, 50)}
+        ${personNode({ citizen_id: spouseId, full_name: spouseName, _rel: spouseRel }, spouseRel, false, 50)}
       </div>`;
   }
 

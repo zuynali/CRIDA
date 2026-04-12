@@ -10,7 +10,7 @@ cnic_bp = Blueprint("cnic", __name__)
 
 # Schema reference:
 # CNIC_Application: application_id, citizen_id, application_type, submission_date,
-#                   status (Pending/Under Review/Approved/Rejected), office_id,
+#                   status (Pending/Under Review/Pending Biometric/Pending Admin Approval/Approved/Rejected), office_id,
 #                   rejection_reason
 # CNIC_Card: card_id, citizen_id (UNIQUE), card_number, issue_date, expiry_date,
 #            card_status, fingerprint_verified
@@ -119,38 +119,115 @@ def submit_cnic():
     return jsonify({"message": "CNIC application submitted", "application_id": new_id}), 201
 
 
-@cnic_bp.route("/<int:app_id>/approve", methods=["PUT"])
+@cnic_bp.route("/citizen-apply", methods=["POST"])
 @token_required
-@permission_required("manage_cnic")
-def approve_cnic(app_id):
+def citizen_apply_cnic():
+    import datetime as _dt
+    if g.officer.get("role_name") != "Citizen":
+        return jsonify({"error": "Only citizens can use this endpoint"}), 403
+    
+    data = request.json or {}
+    citizen_id = g.officer["citizen_id"]
+    application_type = data.get("application_type", "New")
+    office_id = data.get("office_id", 1)  # Default to Head Office
+
+    valid_types = ('New', 'Renewal', 'Replacement')
+    if application_type not in valid_types:
+        return jsonify({"error": f"application_type must be one of {valid_types}"}), 400
+
+    # Age check: must be at least 18 years old for CNIC (matches DB trigger)
+    citizen = execute_query(
+        "SELECT dob FROM Citizen WHERE citizen_id = %s", (citizen_id,), fetch='one')
+    if citizen and citizen.get("dob"):
+        try:
+            dob = _dt.datetime.strptime(str(citizen["dob"])[:10], "%Y-%m-%d").date()
+            age_years = (_dt.date.today() - dob).days // 365
+            if age_years < 18:
+                return jsonify({"error": f"You must be at least 18 years old to apply for a CNIC. Your current age is {age_years} year(s)."}), 400
+        except ValueError:
+            pass
+
+    def ops(conn, cursor):
+        cursor.execute(
+            """INSERT INTO CNIC_Application
+               (citizen_id, application_type, status, office_id)
+               VALUES (%s, %s, 'Pending', %s)""",
+            (citizen_id, application_type, office_id))
+        new_app_id = cursor.lastrowid
+
+        # Notify Registrar/Admin officers about the new CNIC application
+        cursor.execute(
+            """SELECT officer_id FROM Officer o
+               JOIN Role r ON o.role_id = r.role_id
+               WHERE r.role_name IN ('Registrar', 'Admin') AND o.is_active = 1
+               LIMIT 5"""
+        )
+        officers = cursor.fetchall()
+        for off in (officers or []):
+            try:
+                cursor.execute(
+                    """INSERT INTO Notification (citizen_id, officer_id, title, message, notification_type, category)
+                       VALUES (NULL, %s, 'New CNIC Application', %s, 'info', 'document')""",
+                    (off["officer_id"],
+                     f"Citizen ID {citizen_id} has submitted a new CNIC ({application_type}) application. Please review it in the Officer Portal under Doc Applications.")
+                )
+            except Exception:
+                pass
+        return new_app_id
+
+    new_id = execute_transaction_custom(ops)
+    return jsonify({"message": "CNIC application submitted", "application_id": new_id}), 201
+
+
+@cnic_bp.route("/<int:app_id>/request-biometric", methods=["PUT"])
+@token_required
+def request_biometric_cnic(app_id):
+    """Transition app to 'Under Review'. Allowed for Registrar and Admin by role."""
+    if g.officer.get("role_name") not in ("Admin", "Registrar"):
+        return jsonify({"error": "Only Registrar or Admin officers can request biometric for CNIC"}), 403
     app = execute_query(
         "SELECT * FROM CNIC_Application WHERE application_id = %s", (app_id,), fetch='one')
     if not app:
         return jsonify({"error": "Application not found"}), 404
     if app["status"] not in ("Pending", "Under Review"):
-        return jsonify({"error": f"Cannot approve application with status '{app['status']}'"}), 400
+        return jsonify({"error": f"Cannot start biometric review from '{app['status']}'"}), 400
 
     def ops(conn, cursor):
-        if app["application_type"] in ("Renewal", "Replacement"):
-            cursor.execute(
-                "DELETE FROM CNIC_Card WHERE citizen_id = %s", (app["citizen_id"],))
-
         cursor.execute(
-            "SELECT card_id FROM CNIC_Card WHERE citizen_id = %s",
-            (app["citizen_id"],)
+            "UPDATE CNIC_Application SET status = 'Under Review' WHERE application_id = %s",
+            (app_id,))
+        cursor.execute(
+            """INSERT INTO Audit_Log
+               (officer_id, action_type, table_name, record_id, ip_address)
+               VALUES (%s, 'UPDATE', 'CNIC_Application', %s, %s)""",
+            (g.officer["officer_id"], app_id, request.remote_addr))
+        # Notify citizen to visit office for biometric
+        cursor.execute(
+            """INSERT INTO Notification (citizen_id, title, message, notification_type, category) 
+               VALUES (%s, %s, %s, 'info', 'appointment')""",
+            (app['citizen_id'], "Biometric Verification Required",
+             "Your CNIC application is under review. Please visit your nearest CRIDA office for biometric capturing.",)
         )
-        existing = cursor.fetchone()
-        card_number = _generate_cnic_number(app["citizen_id"])
+        return True
 
-        if not existing:
-            cursor.execute(
-                "INSERT INTO CNIC_Card (citizen_id, card_number, issue_date, expiry_date, card_status, fingerprint_verified)"
-                " VALUES (%s, %s, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 10 YEAR), 'Active', FALSE)",
-                (app["citizen_id"], card_number)
-            )
+    execute_transaction_custom(ops)
+    return jsonify({"message": "Application moved to Under Review — citizen notified to visit office for biometric."}), 200
 
+
+@cnic_bp.route("/<int:app_id>/submit-to-admin", methods=["PUT"])
+@token_required
+def submit_to_admin_cnic(app_id):
+    """After biometric capture, submit the application to Admin for final approval."""
+    app = execute_query(
+        "SELECT * FROM CNIC_Application WHERE application_id = %s", (app_id,), fetch='one')
+    if not app:
+        return jsonify({"error": "Application not found"}), 404
+    if app["status"] not in ("Under Review",):
+        return jsonify({"error": f"Application must be Under Review before submission. Current: '{app['status']}'"}), 400
+
+    def ops(conn, cursor):
         cursor.execute(
-            "UPDATE CNIC_Application SET status = 'Approved' WHERE application_id = %s",
+            "UPDATE CNIC_Application SET status = 'Pending Admin Approval' WHERE application_id = %s",
             (app_id,))
         cursor.execute(
             """INSERT INTO Audit_Log
@@ -160,20 +237,58 @@ def approve_cnic(app_id):
         return True
 
     execute_transaction_custom(ops)
+    return jsonify({"message": "Application submitted to Admin for final approval."}), 200
+
+
+@cnic_bp.route("/<int:app_id>/approve", methods=["PUT"])
+@token_required
+@permission_required("manage_cnic")
+def approve_cnic(app_id):
+    app = execute_query(
+        "SELECT * FROM CNIC_Application WHERE application_id = %s", (app_id,), fetch='one')
+    if not app:
+        return jsonify({"error": "Application not found"}), 404
+    if app["status"] not in ("Pending Admin Approval",):
+        return jsonify({"error": f"Cannot grant final approval for application with status '{app['status']}'"}), 400
+
+    def ops(conn, cursor):
+        if app["application_type"] in ("Renewal", "Replacement"):
+            cursor.execute(
+                "DELETE FROM CNIC_Card WHERE citizen_id = %s", (app["citizen_id"],))
+
+        cursor.execute(
+            "UPDATE CNIC_Application SET status = 'Approved' WHERE application_id = %s",
+            (app_id,))
+        cursor.execute(
+            """INSERT INTO Audit_Log
+               (officer_id, action_type, table_name, record_id, ip_address)
+               VALUES (%s, 'UPDATE', 'CNIC_Application', %s, %s)""",
+            (g.officer["officer_id"], app_id, request.remote_addr))
+        cursor.execute(
+            """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
+               VALUES (%s, 'CNIC Approved', 'Your CNIC application has been approved and your CNIC is now active. You can download it from your portal.', 'success', 'document')""",
+            (app["citizen_id"],))
+        return True
+
+    execute_transaction_custom(ops)
     return jsonify({
-        "message": "CNIC application approved. CNIC card created by trigger."
+        "message": "CNIC application approved and CNIC card issued."
     }), 200
 
 
 @cnic_bp.route("/<int:app_id>/reject", methods=["PUT"])
 @token_required
-@permission_required("manage_cnic")
 def reject_cnic(app_id):
+    """Any authenticated officer (non-Citizen) may reject a CNIC application."""
+    if g.officer.get("role_name") == "Citizen":
+        return jsonify({"error": "Citizens cannot perform this action"}), 403
     data = request.json or {}
     app = execute_query(
         "SELECT * FROM CNIC_Application WHERE application_id = %s", (app_id,), fetch='one')
     if not app:
         return jsonify({"error": "Application not found"}), 404
+    if app["status"] in ("Approved",):
+        return jsonify({"error": "Cannot reject an already approved application"}), 400
 
     def ops(conn, cursor):
         cursor.execute(
@@ -186,6 +301,16 @@ def reject_cnic(app_id):
                (officer_id, action_type, table_name, record_id, ip_address)
                VALUES (%s, 'UPDATE', 'CNIC_Application', %s, %s)""",
             (g.officer["officer_id"], app_id, request.remote_addr))
+        # Notify citizen
+        try:
+            cursor.execute(
+                """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
+                   VALUES (%s, 'CNIC Application Rejected', %s, 'error', 'document')""",
+                (app["citizen_id"],
+                 f"Your CNIC application has been rejected. Reason: {data.get('reason', 'No reason provided')}")
+            )
+        except Exception:
+            pass
         return True
 
     execute_transaction_custom(ops)

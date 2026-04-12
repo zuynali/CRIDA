@@ -353,9 +353,10 @@
     <div class="nav-section">
       <div class="nav-label">Documents</div>
       <nav>
+        <a href="#" data-tab="doc-applications" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-folder-open"></i> Doc Applications</a>
         <a href="#" data-tab="pdf" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-file-pdf"></i> PDF Generator</a>
         <a href="#" data-tab="camera" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-camera"></i> Camera Capture</a>
-        <a href="#" data-tab="biometric" data-roles="Admin,Passport_Officer,License_Officer"><i class="fas fa-fingerprint"></i> Biometric</a>
+        <a href="#" data-tab="biometric" data-roles="Admin,Registrar,Passport_Officer,License_Officer"><i class="fas fa-fingerprint"></i> Biometric</a>
       </nav>
     </div>
 
@@ -371,7 +372,7 @@
     <div class="nav-section">
       <div class="nav-label">Admin</div>
       <nav>
-        <a href="#" data-tab="notif" data-roles="Admin,Registrar,Security_Officer"><i class="fas fa-bell"></i> Notifications</a>
+        <a href="#" data-tab="notif" data-roles="Admin,Registrar,Passport_Officer,License_Officer,Security_Officer"><i class="fas fa-bell"></i> Notifications</a>
         <a href="#" data-tab="perms" data-roles="Admin"><i class="fas fa-key"></i> Permissions</a>
         <a href="#" data-tab="audit" data-roles="Admin,Security_Officer"><i class="fas fa-list-check"></i> Audit Log</a>
       </nav>
@@ -423,15 +424,11 @@
             </div>
             <div class="form-group">
               <label>Email</label>
-              <input id="login-email" type="email" value="officer5@crida.pk" placeholder="officer@crida.pk">
+              <input id="login-email" type="email" placeholder="Enter your email">
             </div>
             <div class="form-group">
               <label>Password</label>
-              <input id="login-pass" type="password" value="hash" placeholder="Password">
-            </div>
-            <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:16px;padding:10px;background:var(--green-pale);border-radius:7px;border:1px solid var(--border);">
-              Default: <code>officer5@crida.pk</code> / <code>hash</code> (Admin)<br>
-              After setup_database.sql: same email / <code>Admin@1234</code>
+              <input id="login-pass" type="password" placeholder="Enter your password">
             </div>
             <button onclick="doLogin()" class="btn btn-primary btn-block">
               <i class="fas fa-sign-in-alt"></i> Login
@@ -499,6 +496,20 @@
             <button onclick="loadApplications()" class="btn btn-primary"><i class="fas fa-sync"></i> Load Applications</button>
           </div>
           <div id="applications-table"></div>
+        </div>
+      </div>
+
+      <!-- DOCUMENT APPLICATIONS (CNIC / Passport / License) -->
+      <div id="tab-doc-applications" class="tab-content">
+        <div class="card">
+          <h3><i class="fas fa-folder-open"></i> Document Applications</h3>
+          <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:14px">
+            Review citizen-submitted CNIC, Passport & License requests. Use the workflow buttons to progress each application through the approval stages.
+          </p>
+          <div class="toolbar">
+            <button onclick="loadDocApplications()" class="btn btn-primary"><i class="fas fa-sync"></i> Refresh</button>
+          </div>
+          <div id="doc-applications-table"><p style="padding:14px;color:var(--text-muted)">Click Refresh to load applications.</p></div>
         </div>
       </div>
 

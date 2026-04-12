@@ -11,7 +11,7 @@ passport_bp = Blueprint("passports", __name__)
 
 # Schema reference:
 # Passport_Application: passport_app_id, citizen_id, application_type, submission_date,
-#                       status (Draft/Submitted/Under Review/Approved/Rejected/
+#                       status (Draft/Submitted/Under Review/Pending Biometric/Pending Admin Approval/Approved/Rejected/
 #                               Ready for Collection/Collected),
 #                       office_id, fee_paid (tinyint, default 0)
 # Passport: passport_id, citizen_id, passport_number, issue_date, expiry_date, passport_status
@@ -104,18 +104,100 @@ def submit_passport():
     return jsonify({"message": "Passport application submitted", "passport_app_id": new_id}), 201
 
 
-@passport_bp.route("/<int:app_id>/approve", methods=["PUT"])
+@passport_bp.route("/citizen-apply", methods=["POST"])
 @token_required
-@permission_required("manage_passport")
-def approve_passport(app_id):
+def citizen_apply_passport():
+    if g.officer.get("role_name") != "Citizen":
+        return jsonify({"error": "Only citizens can use this endpoint"}), 403
+
+    data = request.json or {}
+    citizen_id = g.officer["citizen_id"]
+    application_type = data.get("application_type", "New")
+    office_id = data.get("office_id", 1)  # Default to Head Office
+
+    valid_types = ('New', 'Renewal', 'Lost Replacement')
+    if application_type not in valid_types:
+        return jsonify({"error": f"application_type must be one of {valid_types}"}), 400
+
+    def ops(conn, cursor):
+        cursor.execute(
+            """INSERT INTO Passport_Application
+               (citizen_id, application_type, status, office_id, fee_paid)
+               VALUES (%s, %s, 'Submitted', %s, 0)""",
+            (citizen_id, application_type, office_id))
+        new_app_id = cursor.lastrowid
+
+        # Notify Passport_Officer / Admin about the new passport application
+        cursor.execute(
+            """SELECT officer_id FROM Officer o
+               JOIN Role r ON o.role_id = r.role_id
+               WHERE r.role_name IN ('Passport_Officer', 'Admin') AND o.is_active = 1
+               LIMIT 5"""
+        )
+        officers = cursor.fetchall()
+        for off in (officers or []):
+            try:
+                cursor.execute(
+                    """INSERT INTO Notification (citizen_id, officer_id, title, message, notification_type, category)
+                       VALUES (NULL, %s, 'New Passport Application', %s, 'info', 'document')""",
+                    (off["officer_id"],
+                     f"Citizen ID {citizen_id} has submitted a new Passport ({application_type}) application. Please review it in the Officer Portal under Doc Applications.")
+                )
+            except Exception:
+                pass
+        return new_app_id
+
+    new_id = execute_transaction_custom(ops)
+    return jsonify({"message": "Passport application submitted", "passport_app_id": new_id}), 201
+
+
+@passport_bp.route("/<int:app_id>/request-biometric", methods=["PUT"])
+@token_required
+def request_biometric_passport(app_id):
+    """Move to 'Pending Biometric'. Allowed for Passport_Officer and Admin by role."""
+    if g.officer.get("role_name") not in ("Admin", "Passport_Officer"):
+        return jsonify({"error": "Only Passport_Officer or Admin can request biometric for Passport"}), 403
     app = execute_query(
         "SELECT * FROM Passport_Application WHERE passport_app_id = %s", (app_id,), fetch='one')
     if not app:
         return jsonify({"error": "Application not found"}), 404
+    if app["status"] not in ("Submitted", "Under Review", "Draft"):
+        return jsonify({"error": f"Cannot transition to Pending Biometric from '{app['status']}'"}), 400
 
     def ops(conn, cursor):
         cursor.execute(
-            "UPDATE Passport_Application SET status = 'Approved' WHERE passport_app_id = %s",
+            "UPDATE Passport_Application SET status = 'Pending Biometric' WHERE passport_app_id = %s",
+            (app_id,))
+        cursor.execute(
+            """INSERT INTO Audit_Log
+               (officer_id, action_type, table_name, record_id, ip_address)
+               VALUES (%s, 'UPDATE', 'Passport_Application', %s, %s)""",
+            (g.officer["officer_id"], app_id, request.remote_addr))
+        
+        # Send Notification to Citizen
+        cursor.execute(
+            """INSERT INTO Notification (citizen_id, title, message, notification_type, category) 
+               VALUES (%s, %s, %s, 'info', 'appointment')""",
+            (app['citizen_id'], "Biometric Verification Required", 
+             "Your Passport application has been reviewed. Please visit your nearest CRIDA office for biometric capturing.",)
+        )
+        return True
+
+    execute_transaction_custom(ops)
+    return jsonify({"message": "Application transitioned to Pending Biometric, notification sent."}), 200
+
+
+@passport_bp.route("/<int:app_id>/submit-to-admin", methods=["PUT"])
+@token_required
+def submit_to_admin_passport(app_id):
+    app = execute_query(
+        "SELECT * FROM Passport_Application WHERE passport_app_id = %s", (app_id,), fetch='one')
+    if not app:
+        return jsonify({"error": "Application not found"}), 404
+    
+    def ops(conn, cursor):
+        cursor.execute(
+            "UPDATE Passport_Application SET status = 'Pending Admin Approval' WHERE passport_app_id = %s",
             (app_id,))
         cursor.execute(
             """INSERT INTO Audit_Log
@@ -125,18 +207,58 @@ def approve_passport(app_id):
         return True
 
     execute_transaction_custom(ops)
-    return jsonify({"message": "Passport application approved"}), 200
+    return jsonify({"message": "Application submitted to Admin for final approval."}), 200
+
+
+@passport_bp.route("/<int:app_id>/approve", methods=["PUT"])
+@token_required
+@permission_required("manage_passport")
+def approve_passport(app_id):
+    app = execute_query(
+        "SELECT * FROM Passport_Application WHERE passport_app_id = %s", (app_id,), fetch='one')
+    if not app:
+        return jsonify({"error": "Application not found"}), 404
+    if app["status"] not in ("Pending Admin Approval",):
+        return jsonify({"error": f"Cannot grant final approval for application with status '{app['status']}'"}), 400
+
+    def ops(conn, cursor):
+        today = datetime.date.today()
+        expiry = _add_years(today, 10)
+        cursor.execute(
+            """INSERT INTO Passport (citizen_id, passport_number, issue_date, expiry_date, passport_status)
+               VALUES (%s, %s, %s, %s, 'Valid')""",
+            (app["citizen_id"], f"PK{app_id:06d}", today, expiry))
+        cursor.execute(
+            "UPDATE Passport_Application SET status = 'Approved' WHERE passport_app_id = %s",
+            (app_id,))
+        cursor.execute(
+            """INSERT INTO Audit_Log
+               (officer_id, action_type, table_name, record_id, ip_address)
+               VALUES (%s, 'UPDATE', 'Passport_Application', %s, %s)""",
+            (g.officer["officer_id"], app_id, request.remote_addr))
+        cursor.execute(
+            """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
+               VALUES (%s, 'Passport Approved', 'Your passport application has been approved and your passport is now active. You can download it from your portal.', 'success', 'document')""",
+            (app["citizen_id"],))
+        return True
+
+    execute_transaction_custom(ops)
+    return jsonify({"message": "Passport application approved and passport issued"}), 200
 
 
 @passport_bp.route("/<int:app_id>/reject", methods=["PUT"])
 @token_required
-@permission_required("manage_passport")
 def reject_passport(app_id):
+    """Any authenticated officer (non-Citizen) may reject a Passport application."""
+    if g.officer.get("role_name") == "Citizen":
+        return jsonify({"error": "Citizens cannot perform this action"}), 403
     data = request.json or {}
     app = execute_query(
         "SELECT * FROM Passport_Application WHERE passport_app_id = %s", (app_id,), fetch='one')
     if not app:
         return jsonify({"error": "Application not found"}), 404
+    if app["status"] in ("Approved",):
+        return jsonify({"error": "Cannot reject an already approved application"}), 400
 
     def ops(conn, cursor):
         cursor.execute(
@@ -147,6 +269,16 @@ def reject_passport(app_id):
                (officer_id, action_type, table_name, record_id, ip_address)
                VALUES (%s, 'UPDATE', 'Passport_Application', %s, %s)""",
             (g.officer["officer_id"], app_id, request.remote_addr))
+        # Notify citizen
+        try:
+            cursor.execute(
+                """INSERT INTO Notification (citizen_id, title, message, notification_type, category)
+                   VALUES (%s, 'Passport Application Rejected', %s, 'error', 'document')""",
+                (app["citizen_id"],
+                 f"Your Passport application has been rejected. Reason: {data.get('reason', 'No reason provided')}")
+            )
+        except Exception:
+            pass
         return True
 
     execute_transaction_custom(ops)

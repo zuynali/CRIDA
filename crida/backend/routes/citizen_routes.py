@@ -82,7 +82,27 @@ def apply_citizen():
                 sanitize_string(data.get("email"), 100)
             )
         )
-        return cursor.lastrowid
+        app_id = cursor.lastrowid
+
+        # Notify all Registrar officers about the new pending application
+        cursor.execute(
+            """SELECT officer_id FROM Officer o
+               JOIN Role r ON o.role_id = r.role_id
+               WHERE r.role_name IN ('Registrar', 'Admin') AND o.is_active = 1
+               LIMIT 5"""
+        )
+        registrars = cursor.fetchall()
+        for reg in (registrars or []):
+            try:
+                cursor.execute(
+                    """INSERT INTO Notification (citizen_id, officer_id, title, message, notification_type, category)
+                       VALUES (NULL, %s, 'New Citizen Application', %s, 'info', 'system')""",
+                    (reg["officer_id"],
+                     f"A new citizen registration application has been submitted by {data['first_name']} {data['last_name']}. Please review it in the Officer Portal.")
+                )
+            except Exception:
+                pass  # Non-critical — notification failure should not block registration
+        return app_id
 
     application_id = execute_transaction_custom(ops)
     return jsonify({"message": "Application submitted successfully.", "application_id": application_id}), 201
@@ -99,8 +119,9 @@ def get_application_status():
     app = execute_query(
         """SELECT application_id, first_name, last_name, dob,
                           gender, marital_status, blood_group, city, province,
-                          status, rejection_reason, citizen_id, cnic_number,
-                          submission_date, approved_at
+                          status, rejection_reason, citizen_id,
+                          COALESCE(national_id_number, cnic_number) AS national_id_number,
+                          cnic_number, submission_date, approved_at
            FROM Citizen_Application
            WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s) AND dob = %s
            ORDER BY submission_date DESC LIMIT 1""",
@@ -158,6 +179,7 @@ def get_citizen_application(app_id):
 @token_required
 @permission_required("manage_citizens")
 def approve_citizen_application(app_id):
+    import datetime as _dt
     app = execute_query(
         "SELECT * FROM Citizen_Application WHERE application_id = %s",
         (app_id,), fetch='one')
@@ -166,8 +188,15 @@ def approve_citizen_application(app_id):
     if app["status"] not in ("Pending", "Under Review"):
         return jsonify({"error": f"Cannot approve application with status '{app['status']}'"}), 400
 
-    # The application does not carry a national_id_number until approval,
-    # so we skip a duplicate NID check here and generate a new CNIC record.
+    # Age check: citizen must be at least 0 days old (any valid DOB accepted for registration)
+    try:
+        dob_date = _dt.datetime.strptime(str(app["dob"])[:10], "%Y-%m-%d").date()
+        age_days = (_dt.date.today() - dob_date).days
+        if age_days < 0:
+            return jsonify({"error": "Date of birth cannot be in the future."}), 400
+    except ValueError:
+        return jsonify({"error": "Invalid date of birth format."}), 400
+
     def ops(conn, cursor):
         # Generate the next sequential citizen ID and national ID number.
         cursor.execute(
@@ -177,7 +206,9 @@ def approve_citizen_application(app_id):
                FROM Citizen""")
         row = cursor.fetchone()
         next_id = row["next_id"]
-        card_number = str(row["next_nid"])
+        # National ID is NOT the CNIC — it's just an identifier stored in Citizen table.
+        # CNIC must be applied for separately via /cnic/citizen-apply.
+        national_id = str(row["next_nid"])
 
         cursor.execute(
             """INSERT INTO Citizen
@@ -186,7 +217,7 @@ def approve_citizen_application(app_id):
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')""",
             (
                 next_id,
-                card_number,
+                national_id,
                 app["first_name"], app["last_name"],
                 app["dob"], app["gender"], app["marital_status"] or "Single",
                 app["blood_group"]
@@ -194,12 +225,19 @@ def approve_citizen_application(app_id):
         )
         new_cid = next_id
 
-        cursor.execute(
-            "INSERT INTO CNIC_Card"
-            " (citizen_id, card_number, issue_date, expiry_date, card_status, fingerprint_verified)"
-            " VALUES (%s, %s, CURRENT_DATE, DATE_ADD(CURRENT_DATE, INTERVAL 10 YEAR), 'Active', FALSE)",
-            (new_cid, card_number)
-        )
+        # Auto-create Birth Registration so the Birth Certificate PDF is immediately available.
+        # registrar_officer_id = the approving officer; hospital_id is optional (NULL ok).
+        cert_number = f"BC-{new_cid}-{str(app['dob']).replace('-', '')}"
+        try:
+            cursor.execute(
+                """INSERT INTO Birth_Registration
+                   (citizen_id, hospital_id, registrar_officer_id,
+                    birth_certificate_number, registration_date)
+                   VALUES (%s, NULL, %s, %s, CURRENT_DATE)""",
+                (new_cid, g.officer["officer_id"], cert_number)
+            )
+        except Exception:
+            pass  # If Birth_Registration already exists or hospital_id NOT NULL constraint, skip.
 
         if app.get("city"):
             cursor.execute(
@@ -220,10 +258,10 @@ def approve_citizen_application(app_id):
         cursor.execute(
             """UPDATE Citizen_Application
                SET status = 'Approved', citizen_id = %s,
-                   national_id_number = %s, cnic_number = %s,
+                   national_id_number = %s,
                    reviewer_officer_id = %s, approved_at = CURRENT_TIMESTAMP
                WHERE application_id = %s""",
-            (new_cid, card_number, card_number, g.officer["officer_id"], app_id)
+            (new_cid, national_id, g.officer["officer_id"], app_id)
         )
 
         cursor.execute(
@@ -236,23 +274,23 @@ def approve_citizen_application(app_id):
         cursor.execute(
             """INSERT INTO Notification
                (citizen_id, officer_id, title, message, notification_type, category)
-               VALUES (%s, %s, %s, %s, 'success', 'system')""",
+               VALUES (%s, NULL, %s, %s, 'success', 'system')""",
             (
                 new_cid,
-                None,
-                'CNIC Application Approved',
-                f'Your registration is approved. Your CNIC number is {card_number}.'
+                'Registration Approved — Welcome to CRIDA',
+                f'Your registration is approved. Your Citizen ID is {new_cid} and National ID is {national_id}. '
+                f'Your Birth Certificate is now available. To get a CNIC, please login and apply from the Documents section.'
             )
         )
 
-        return {"citizen_id": new_cid, "cnic_number": card_number}
+        return {"citizen_id": new_cid, "national_id": national_id}
 
     try:
         result = execute_transaction_custom(ops)
         return jsonify({
-            "message": "Application approved and citizen record created.",
+            "message": "Application approved. Citizen record and Birth Certificate created. CNIC must be applied for separately.",
             "citizen_id": result["citizen_id"],
-            "cnic_number": result["cnic_number"]
+            "national_id_number": result["national_id"]
         }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -397,3 +435,107 @@ def get_stats():
         "citizen_gender": {row['gender']: row['count'] for row in citizen_gender},
         "application_status": {row['status']: row['count'] for row in app_status}
     }), 200
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# FAMILY RELATIONSHIPS
+# ─────────────────────────────────────────────────────────────────────────
+
+@citizen_bp.route("/family", methods=["GET"])
+@token_required
+def get_family_relationships():
+    if g.officer.get("role_name") != "Citizen":
+        return jsonify({"error": "Only citizens can view their family relationships via this endpoint"}), 403
+
+    citizen_id = g.officer["citizen_id"]
+    
+    # We want to fetch relationships where this citizen is the source OR the target.
+    # To keep it simple for the UI, we'll format it relative to the logged-in citizen.
+    # Ex: If (1, 2, 'Father') exists -> 2 is the Father of 1.
+    
+    relations = execute_query(
+        """SELECT 
+             r.relationship_id,
+             r.related_citizen_id as relative_id,
+             r.relationship_type,
+             c.first_name,
+             c.last_name,
+             c.status,
+             c.national_id_number,
+             'Direction: They are my ->' AS dir
+           FROM Family_Relationship r
+           JOIN Citizen c ON c.citizen_id = r.related_citizen_id
+           WHERE r.citizen_id = %s
+           
+           UNION ALL
+           
+           SELECT 
+             r.relationship_id,
+             r.citizen_id as relative_id,
+             CASE
+               WHEN r.relationship_type = 'Father' OR r.relationship_type = 'Mother' THEN 
+                  IF(c2.gender = 'Male', 'Son', 'Daughter')
+               WHEN r.relationship_type = 'Husband' THEN 'Wife'
+               WHEN r.relationship_type = 'Wife' THEN 'Husband'
+               WHEN r.relationship_type = 'Son' OR r.relationship_type = 'Daughter' THEN
+                  IF(c2.gender = 'Male', 'Father', 'Mother')
+               WHEN r.relationship_type = 'Brother' OR r.relationship_type = 'Sister' THEN
+                  IF(c2.gender = 'Male', 'Brother', 'Sister')
+             END as relationship_type,
+             c.first_name,
+             c.last_name,
+             c.status,
+             c.national_id_number,
+             'Direction: I am their ->' AS dir
+           FROM Family_Relationship r
+           JOIN Citizen c ON c.citizen_id = r.citizen_id
+           JOIN Citizen c2 ON c2.citizen_id = r.related_citizen_id
+           WHERE r.related_citizen_id = %s
+        """,
+        (citizen_id, citizen_id), fetch='all'
+    )
+    return jsonify({"family": relations or []}), 200
+
+@citizen_bp.route("/family", methods=["POST"])
+@token_required
+def add_family_relationship():
+    import mysql.connector
+    if g.officer.get("role_name") != "Citizen":
+        return jsonify({"error": "Only citizens can add family relationships"}), 403
+
+    citizen_id = g.officer["citizen_id"]
+    data = request.json or {}
+    related_citizen_id = data.get("related_citizen_id")
+    relationship_type = data.get("relationship_type")
+
+    if not related_citizen_id or not relationship_type:
+        return jsonify({"error": "related_citizen_id and relationship_type are required"}), 400
+
+    if str(citizen_id) == str(related_citizen_id):
+        return jsonify({"error": "You cannot add a relationship to yourself."}), 400
+
+    valid_types = ('Father', 'Mother', 'Son', 'Daughter', 'Husband', 'Wife', 'Brother', 'Sister')
+    if relationship_type not in valid_types:
+        return jsonify({"error": f"relationship_type must be one of {valid_types}"}), 400
+
+    # Ensure related citizen exists
+    target = execute_query("SELECT citizen_id FROM Citizen WHERE citizen_id = %s", (related_citizen_id,), fetch='one')
+    if not target:
+        return jsonify({"error": f"Citizen ID {related_citizen_id} not found"}), 404
+
+    try:
+        def ops(conn, cursor):
+            cursor.execute(
+                """INSERT INTO Family_Relationship (citizen_id, related_citizen_id, relationship_type)
+                   VALUES (%s, %s, %s)""",
+                (citizen_id, related_citizen_id, relationship_type)
+            )
+            return True
+        execute_transaction_custom(ops)
+        return jsonify({"message": f"Successfully added {relationship_type} relationship"}), 201
+
+    except mysql.connector.Error as err:
+        # DB trigger threw an exception (e.g. state '45000')
+        return jsonify({"error": f"Validation Error: {err.msg}"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

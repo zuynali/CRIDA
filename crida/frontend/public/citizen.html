@@ -177,6 +177,17 @@
       .nav-tab span{display:none;}
       .doc-grid{grid-template-columns:1fr 1fr;}
     }
+
+    /* ── FAB ── */
+    .fab-chatbot{
+      position:fixed;bottom:24px;right:24px;z-index:9999;
+      background:var(--green);color:white;border-radius:50px;
+      padding:12px 20px;text-decoration:none;font-size:.82rem;font-weight:600;
+      box-shadow:0 4px 20px rgba(10,92,54,.4);
+      display:flex;align-items:center;gap:9px;
+      transition:all .2s;
+    }
+    .fab-chatbot:hover{background:var(--green-mid);box-shadow:0 6px 24px rgba(10,92,54,.5);transform:translateY(-2px);}
   </style>
 </head>
 <body>
@@ -359,8 +370,36 @@
 
     <!-- FAMILY -->
     <div id="panel-family" class="tab-panel">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header"><div class="card-icon"><i class="fas fa-sitemap"></i></div><h2>Add Family Relationship</h2></div>
+        <div class="update-note"><i class="fas fa-info-circle"></i><span>Relationships are subject to official database checks (e.g. age gap, gender match).</span></div>
+        <div class="form-group">
+          <label>Related Citizen ID</label>
+          <input id="rel-cid" type="number" placeholder="Enter relative's Citizen ID" min="1">
+        </div>
+        <div class="form-group">
+          <label>Relationship Type</label>
+          <select id="rel-type">
+            <option value="">Select how they are related to you</option>
+            <option value="Father">Father</option>
+            <option value="Mother">Mother</option>
+            <option value="Son">Son</option>
+            <option value="Daughter">Daughter</option>
+            <option value="Husband">Husband</option>
+            <option value="Wife">Wife</option>
+            <option value="Brother">Brother</option>
+            <option value="Sister">Sister</option>
+          </select>
+        </div>
+        <button onclick="addRelation()" class="btn btn-primary"><i class="fas fa-plus"></i> Add Relationship</button>
+        <div id="rel-msg" class="msg"></div>
+      </div>
+
       <div class="card">
-        <div class="card-header"><div class="card-icon"><i class="fas fa-sitemap"></i></div><h2>Family Tree</h2></div>
+        <div class="card-header">
+          <div class="card-icon"><i class="fas fa-users"></i></div><h2>My Family Tree</h2>
+          <button onclick="loadFamily()" class="btn btn-secondary" style="margin-left:auto;padding:5px 11px;font-size:.76rem"><i class="fas fa-sync"></i> Refresh</button>
+        </div>
         <div id="family-content"><div class="loading"><i class="fas fa-circle-notch"></i>Loading…</div></div>
       </div>
     </div>
@@ -428,7 +467,26 @@
   <div class="portal-footer">CRIDA &nbsp;·&nbsp; Citizen Registration &amp; Identity Database Authority &nbsp;·&nbsp; Government of Pakistan</div>
 </div>
 
+<!-- ── Apply-for-Document Modal ────────────────────────────────────────── -->
+<div id="apply-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:14px;padding:28px 24px;width:100%;max-width:420px;box-shadow:0 12px 48px rgba(0,0,0,.35);border:1px solid var(--border);position:relative;">
+    <button onclick="closeApplyModal()" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-muted);">&#x2715;</button>
+    <h3 id="apply-modal-title" style="margin:0 0 18px;font-size:1.1rem;color:var(--green)"></h3>
+    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:16px;">Your request will be sent to the relevant officer for review. You will receive a notification once your application progresses to the next stage.</p>
+    <div id="apply-modal-body"></div>
+    <div style="display:flex;gap:10px;margin-top:18px;">
+      <button id="apply-modal-submit" class="btn btn-primary" style="flex:1"><i class="fas fa-paper-plane"></i> Submit Application</button>
+      <button onclick="closeApplyModal()" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast-container"></div>
+
+<a href="chatbot.html" class="fab-chatbot" title="Open AI Assistant">
+  <i class="fas fa-robot"></i>
+  <span class="fab-text">AI Assistant</span>
+</a>
 <script src="citizen.js"></script>
 </body>
 </html>

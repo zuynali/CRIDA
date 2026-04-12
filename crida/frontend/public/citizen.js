@@ -62,7 +62,7 @@ function switchPanel(name, btn) {
     if (name === "dashboard")     loadDashboardSummary();
     if (name === "applications")  loadApplications();
     if (name === "documents")     renderDocButtons();
-    if (name === "family")        loadFamilyTree();
+    if (name === "family")        loadFamily();
     if (name === "notifications") loadNotifications();
     if (name === "complaints")    loadMyComplaints();
     if (name === "updates")       loadMyUpdateRequests();
@@ -218,8 +218,13 @@ async function checkApplicationStatus() {
       if (app.status === 'Approved') {
         content += `
           <p><strong>Citizen ID:</strong> ${app.citizen_id}</p>
-          <p><strong>CNIC Number:</strong> ${app.cnic_number}</p>
-          <button onclick="fillLoginForm('${app.citizen_id}', '${app.cnic_number}')" class="btn btn-primary" style="margin-top:10px">
+          <p><strong>National ID Number:</strong> ${app.national_id_number || app.cnic_number || '—'}</p>
+          <p style="font-size:.8rem;color:#a06010;margin-top:4px">
+            <i class="fas fa-info-circle"></i>
+            Your <strong>Birth Certificate</strong> is now available in the citizen portal.
+            To apply for a <strong>CNIC</strong>, please login and go to <em>Documents → Apply for CNIC</em>.
+          </p>
+          <button onclick="fillLoginForm('${app.citizen_id}', '${app.national_id_number || app.cnic_number}')" class="btn btn-primary" style="margin-top:10px">
             <i class="fas fa-sign-in-alt"></i> Login with these credentials
           </button>
         `;
@@ -419,23 +424,158 @@ async function loadApplications() {
 }
 
 // ── DOCUMENTS ─────────────────────────────────────────────────────────────
-function renderDocButtons() {
-  const docs = [
-    { name: "CNIC Card",            icon: "fa-id-card",   path: `cnic/${CITIZEN_ID}` },
-    { name: "Passport",             icon: "fa-passport",  path: `passport/${CITIZEN_ID}` },
-    { name: "Driving License",      icon: "fa-car",       path: `license/${CITIZEN_ID}` },
-    { name: "Birth Certificate",    icon: "fa-baby",      path: `birth-certificate/${CITIZEN_ID}` },
-    { name: "Marriage Certificate", icon: "fa-heart",     path: `marriage-certificate/${CITIZEN_ID}` },
-    { name: "Death Certificate",    icon: "fa-cross",     path: `death-certificate/${CITIZEN_ID}` },
+async function renderDocButtons() {
+  const grid = document.getElementById("doc-grid");
+  const msgEl = document.getElementById("doc-msg");
+  grid.innerHTML = `<div class="loading"><i class="fas fa-circle-notch"></i> Checking your documents…</div>`;
+
+  // Fetch citizen profile to get live document status
+  const r = await req("GET", `/citizens/${CITIZEN_ID}`);
+  const profile = r.ok ? (r.data.citizen || r.data) : {};
+
+  const hasCnic     = profile.has_active_cnic     === "Yes";
+  const hasPassport = profile.has_valid_passport   === "Yes";
+  const hasLicense  = profile.has_valid_license    === "Yes";
+
+  // Fetch application statuses for pending/in-progress states
+  const [cnicR, passR, dlR] = await Promise.all([
+    req("GET", `/cnic/?citizen_id=${CITIZEN_ID}`),
+    req("GET", `/passports/?citizen_id=${CITIZEN_ID}`),
+    req("GET", `/licenses/?citizen_id=${CITIZEN_ID}`)
+  ]);
+
+  const latestApp = (apps) => {
+    const list = apps || [];
+    return list.sort((a, b) => new Date(b.submission_date) - new Date(a.submission_date))[0] || null;
+  };
+
+  const cnicApp     = latestApp(cnicR.ok  ? cnicR.data.applications  : []);
+  const passApp     = latestApp(passR.ok  ? passR.data.applications  : []);
+  const dlApp       = latestApp(dlR.ok    ? dlR.data.applications    : []);
+
+  const statusTag = (s) => {
+    if (!s) return '';
+    const cls = s === 'Approved' ? 'badge-success'
+              : s.includes('Reject') ? 'badge-danger'
+              : 'badge-warning';
+    return `<span class="badge ${cls}" style="font-size:.7rem">${s}</span>`;
+  };
+
+  const docCard = ({ name, icon, path, active, app, applyFn, applyLabel }) => {
+    const appStatus = app ? app.status : null;
+    const isPending = appStatus && !['Approved','Rejected'].includes(appStatus);
+    return `
+    <div class="doc-card">
+      <div class="dc-icon"><i class="fas ${icon}"></i></div>
+      <div class="dc-name">${name}</div>
+      ${appStatus ? `<div style="margin:4px 0;">${statusTag(appStatus)}</div>` : ''}
+      ${active
+        ? `<div class="dc-btn" onclick="downloadPDF('${path}','${name}')">
+             <i class="fas fa-download"></i> Download PDF
+           </div>`
+        : isPending
+          ? `<div class="dc-btn" style="background:var(--gold);color:#000;cursor:default;">
+               <i class="fas fa-clock"></i> In Progress
+             </div>`
+          : `<div class="dc-btn" onclick="${applyFn}" style="background:var(--green-deep)">
+               <i class="fas fa-plus"></i> ${applyLabel}
+             </div>`
+      }
+    </div>`;
+  };
+
+  const cards = [
+    docCard({ name: "CNIC Card",        icon: "fa-id-card",  path: `cnic/${CITIZEN_ID}`,     active: hasCnic,     app: cnicApp,  applyFn: "openApplyModal('cnic')",     applyLabel: "Apply for CNIC" }),
+    docCard({ name: "Passport",         icon: "fa-passport", path: `passport/${CITIZEN_ID}`, active: hasPassport, app: passApp,  applyFn: "openApplyModal('passport')", applyLabel: "Apply for Passport" }),
+    docCard({ name: "Driving License",  icon: "fa-car",      path: `license/${CITIZEN_ID}`,  active: hasLicense,  app: dlApp,    applyFn: "openApplyModal('license')",  applyLabel: "Apply for License" }),
+    // Birth Certificate is always available after registration — no application needed
+    docCard({ name: "Birth Certificate",    icon: "fa-baby",  path: `birth-certificate/${CITIZEN_ID}`,    active: true,  app: null, applyFn: "", applyLabel: "" }),
+    // Marriage Certificate is available if the citizen is registered as married
+    docCard({ name: "Marriage Certificate", icon: "fa-heart", path: `marriage-certificate/${CITIZEN_ID}`, active: (profile.marital_status === 'Married'), app: null, applyFn: "", applyLabel: "" }),
   ];
 
-  document.getElementById("doc-grid").innerHTML = docs.map(d => `
-    <div class="doc-card" onclick="downloadPDF('${d.path}','${d.name}')">
-      <div class="dc-icon"><i class="fas ${d.icon}"></i></div>
-      <div class="dc-name">${d.name}</div>
-      <div class="dc-btn"><i class="fas fa-download"></i> Download PDF</div>
-    </div>
-  `).join("");
+  grid.innerHTML = cards.join("");
+}
+
+// ── APPLY MODAL ───────────────────────────────────────────────────────────
+function openApplyModal(type) {
+  const titles = { cnic: "Apply for CNIC", passport: "Apply for Passport", license: "Apply for Driving License" };
+  let bodyHtml = "";
+
+  if (type === "cnic") {
+    bodyHtml = `
+      <div class="form-group">
+        <label>Application Type</label>
+        <select id="apply-type" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text)">
+          <option value="New">New</option>
+          <option value="Renewal">Renewal</option>
+          <option value="Replacement">Replacement</option>
+        </select>
+      </div>`;
+  } else if (type === "passport") {
+    bodyHtml = `
+      <div class="form-group">
+        <label>Application Type</label>
+        <select id="apply-type" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text)">
+          <option value="New">New</option>
+          <option value="Renewal">Renewal</option>
+          <option value="Lost Replacement">Lost Replacement</option>
+        </select>
+      </div>`;
+  } else if (type === "license") {
+    bodyHtml = `
+      <div class="form-group">
+        <label>License Type</label>
+        <select id="apply-license-type" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text)">
+          <option value="Car">Car</option>
+          <option value="Motorcycle">Motorcycle</option>
+          <option value="Commercial">Commercial</option>
+          <option value="Heavy Vehicle">Heavy Vehicle</option>
+        </select>
+      </div>`;
+  }
+
+  bodyHtml += `<div id="apply-modal-msg" class="msg" style="margin-top:10px"></div>`;
+
+  document.getElementById("apply-modal-title").textContent = titles[type];
+  document.getElementById("apply-modal-body").innerHTML = bodyHtml;
+  document.getElementById("apply-modal-submit").onclick = () => submitDocApplication(type);
+  document.getElementById("apply-modal").style.display = "flex";
+}
+
+function closeApplyModal() {
+  document.getElementById("apply-modal").style.display = "none";
+}
+
+async function submitDocApplication(type) {
+  const msgEl = document.getElementById("apply-modal-msg");
+  msgEl.className = "msg info show";
+  msgEl.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Submitting…`;
+
+  let endpoint = "", body = {};
+
+  if (type === "cnic") {
+    endpoint = "/cnic/citizen-apply";
+    body = { application_type: document.getElementById("apply-type").value };
+  } else if (type === "passport") {
+    endpoint = "/passports/citizen-apply";
+    body = { application_type: document.getElementById("apply-type").value };
+  } else if (type === "license") {
+    endpoint = "/licenses/citizen-apply";
+    body = { license_type: document.getElementById("apply-license-type").value };
+  }
+
+  const r = await req("POST", endpoint, body);
+  if (r.ok) {
+    msgEl.className = "msg ok show";
+    msgEl.innerHTML = `<i class="fas fa-check-circle"></i> Application submitted successfully! You will receive a notification when it progresses.`;
+    toast("Application submitted!", "ok");
+    _loaded.delete("documents");
+    setTimeout(() => { closeApplyModal(); renderDocButtons(); }, 2000);
+  } else {
+    msgEl.className = "msg err show";
+    msgEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${r.data.error || "Submission failed."}` ;
+  }
 }
 
 async function loadDashboardSummary() {
@@ -771,4 +911,155 @@ async function loadMyUpdateRequests() {
       </tr>`).join("")}
     </tbody>
   </table>`;
+}
+
+// ── FAMILY TREE ───────────────────────────────────────────────────────────
+async function loadFamily() {
+  const div = document.getElementById("family-content");
+  div.innerHTML = `<div class="loading"><i class="fas fa-circle-notch"></i>Loading family tree…</div>`;
+
+  const r = await req("GET", `/family-tree/${CITIZEN_ID}`);
+  if (r.ok) {
+    if (!r.data.relationships?.length && !r.data.reverse_relations?.length && !r.data.spouse) {
+      div.innerHTML = `<div class="empty"><i class="fas fa-sitemap"></i>No family relationships found.</div>`;
+    } else {
+      renderCitizenTree(r.data, "family-content");
+    }
+  } else {
+    div.innerHTML = `<div class="msg err show"><i class="fas fa-exclamation-circle"></i> ${r.data.error || "Could not load family tree."}</div>`;
+  }
+}
+
+function renderCitizenTree(data, targetId) {
+  const parents = [], children = [], siblings = [], others = [];
+  const seen = new Set();
+
+  let customSpouse = null;
+
+  [
+    ...(data.relationships || []).map(r => ({ ...r, _rel: r.relationship_type })),
+    ...(data.reverse_relations || []).map(r => ({ ...r, _rel: r.relationship_type }))
+  ].forEach(r => {
+    if (seen.has(r.citizen_id)) return;
+    seen.add(r.citizen_id);
+    const rel = r._rel;
+    if (['Father', 'Mother', 'Grandfather', 'Grandmother'].includes(rel)) parents.push(r);
+    else if (['Son', 'Daughter', 'Child', 'Grandson', 'Granddaughter'].includes(rel)) children.push(r);
+    else if (['Brother', 'Sister', 'Sibling', 'Brother-in-law', 'Sister-in-law'].includes(rel)) siblings.push(r);
+    else if (['Husband', 'Wife', 'Spouse'].includes(rel)) {
+      if (!customSpouse) customSpouse = { citizen_id: r.citizen_id, full_name: r.full_name, _rel: rel };
+    }
+    else others.push(r);
+  });
+
+  const root = data.citizen;
+  const spouse = data.spouse || customSpouse;
+  let html = `<div style="display:flex;flex-direction:column;align-items:center;background:var(--off-white);padding:24px;border-radius:12px;gap:20px;overflow-x:auto;">`;
+
+  if (parents.length) {
+    html += `
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div style="font-weight:600;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.05em">Parents</div>
+        <div style="display:flex;gap:15px">${parents.map(p => personNode(p, p._rel, false, 52)).join('')}</div>
+      </div>
+      <div style="width:2px;height:20px;background:var(--border);"></div>`;
+  }
+
+  html += `<div style="display:flex;align-items:center;gap:30px;flex-wrap:wrap">`;
+
+  if (siblings.length) {
+    html += `
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div style="font-weight:600;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.05em">Siblings</div>
+        <div style="display:flex;gap:15px;flex-wrap:wrap">
+          ${siblings.map(p => personNode(p, p._rel, false, 50)).join('')}
+        </div>
+      </div>
+      <div style="width:30px;height:2px;background:var(--border)"></div>`;
+  }
+
+  html += `
+    <div style="display:flex;flex-direction:column;align-items:center">
+      <div style="font-weight:600;font-size:0.75rem;color:var(--green);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.05em">Me</div>
+      ${personNode(root, null, true, 70)}
+    </div>`;
+
+  if (spouse) {
+    const spouseRel = spouse._rel || (root.gender === 'Male' ? 'Wife' : 'Husband');
+    const spouseId = spouse.spouse_id || spouse.citizen_id;
+    const spouseName = spouse.spouse_name || spouse.full_name;
+    html += `
+      <div style="width:30px;height:2px;background:var(--gold);opacity:0.5"></div>
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div style="font-weight:600;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.05em">${spouseRel}</div>
+        ${personNode({ citizen_id: spouseId, full_name: spouseName, _rel: spouseRel }, spouseRel, false, 50)}
+      </div>`;
+  }
+
+  html += `</div>`;
+
+  if (children.length) {
+    html += `
+      <div style="width:2px;height:20px;background:var(--border);"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div style="font-weight:600;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.05em">Children</div>
+        <div style="display:flex;gap:15px">${children.map(p => personNode(p, p._rel, false, 52)).join('')}</div>
+      </div>`;
+  }
+
+  if (others.length) {
+    html += `
+      <div style="margin-top:20px">
+        <div style="font-weight:600;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.05em">Others</div>
+        <div style="display:flex;gap:15px">${others.map(p => personNode(p, p._rel, false, 48)).join('')}</div>
+      </div>`;
+  }
+
+  html += `</div>`;
+  document.getElementById(targetId).innerHTML = html;
+}
+
+function personNode(person, relation, isRoot = false, size = 60) {
+  const initials = person.full_name
+    ? person.full_name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0,2)
+    : "?";
+  return `
+    <div style="display:flex;flex-direction:column;align-items:center;margin:6px;background:white;padding:12px 18px;border-radius:10px;box-shadow:var(--shadow);min-width:100px;border:1px solid ${isRoot ? 'var(--green)' : 'var(--border)'}">
+      <div style="width:${size}px;height:${size}px;border-radius:50%;
+        background:${isRoot ? 'var(--green)' : 'var(--green-pale)'};color:${isRoot ? 'white' : 'var(--green)'};
+        display:flex;align-items:center;justify-content:center;
+        font-weight:bold;font-size:${size / 2.5}px;
+        border:${isRoot ? '2px solid rgba(255,255,255,0.2)' : 'none'};">
+        ${initials}
+      </div>
+      <div style="margin-top:10px;font-size:0.8rem;text-align:center;font-weight:600;color:var(--text-mid);white-space:nowrap">${person.full_name || "Unknown"}</div>
+      ${relation ? `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">${relation}</div>` : ""}
+    </div>`;
+}
+
+async function addRelation() {
+  const relCid = document.getElementById("rel-cid").value;
+  const relType = document.getElementById("rel-type").value;
+  
+  if (!relCid || !relType) {
+    showMsg("rel-msg", "Please enter a Citizen ID and select a relationship type.", "err");
+    return;
+  }
+  
+  showMsg("rel-msg", "Submitting…", "info");
+  
+  const r = await req("POST", "/citizens/family", {
+    related_citizen_id: parseInt(relCid),
+    relationship_type: relType
+  });
+
+  if (r.ok) {
+    document.getElementById("rel-cid").value = "";
+    document.getElementById("rel-type").value = "";
+    showMsg("rel-msg", r.data.message || "Relationship added successfully.", "ok");
+    toast("Family relationship added!", "ok");
+    loadFamily(); // refresh list
+  } else {
+    showMsg("rel-msg", r.data.error || "Failed to add relationship.", "err");
+  }
 }

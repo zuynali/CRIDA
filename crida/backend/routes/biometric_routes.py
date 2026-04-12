@@ -48,12 +48,16 @@ def _resolve_path(file_path: str) -> str:
 
 @biometric_bp.route("/upload-photo", methods=["POST"])
 @token_required
-@permission_required("manage_biometric")
 def upload_photo():
     """
     Body: { citizen_id: int, image: "data:image/jpeg;base64,…" }
     Saves the JPEG to uploads/citizen_<id>_photo.jpg and upserts Document.
     """
+    # Any document-handling officer role may capture biometric (no individual permission required)
+    _BIOMETRIC_ROLES = {"Admin", "Registrar", "Passport_Officer", "License_Officer"}
+    if g.officer.get("role_name") not in _BIOMETRIC_ROLES:
+        return jsonify({"error": "Only document officers (Registrar, Passport_Officer, License_Officer, Admin) can capture biometrics"}), 403
+
     import base64
 
     data = request.json or {}
@@ -135,9 +139,13 @@ def upload_photo():
 
 @biometric_bp.route("/enroll", methods=["POST"])
 @token_required
-@permission_required("manage_biometric")
 def enroll():
     data = request.json or {}
+    # Any document-handling officer role may enroll biometric data
+    _BIOMETRIC_ROLES = {"Admin", "Registrar", "Passport_Officer", "License_Officer"}
+    if g.officer.get("role_name") not in _BIOMETRIC_ROLES:
+        return jsonify({"error": "Only document officers can enroll biometric data"}), 403
+
     ok, err = require_fields(data, "citizen_id")
     if not ok:
         return jsonify({"error": err}), 400
@@ -386,12 +394,16 @@ def verify_face():
 
 @biometric_bp.route("/upload-fingerprint", methods=["POST"])
 @token_required
-@permission_required("manage_biometric")
 def upload_fingerprint():
     """
     Body: { citizen_id: int, image: "data:image/jpeg;base64,…" }
     Saves the fingerprint JPEG and upserts a Document row (supporting_doc).
     """
+    # Any document-handling officer role may capture fingerprints
+    _BIOMETRIC_ROLES = {"Admin", "Registrar", "Passport_Officer", "License_Officer"}
+    if g.officer.get("role_name") not in _BIOMETRIC_ROLES:
+        return jsonify({"error": "Only document officers can capture fingerprint data"}), 403
+
     import base64
 
     data = request.json or {}
