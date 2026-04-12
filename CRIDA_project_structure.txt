@@ -1,0 +1,429 @@
+CRIDA Project Architecture and Flow
+===================================
+
+This document describes the CRIDA project structure, the main backend and frontend components, database schema and relationships, request flow, key functionalities, and how the system connects the database, backend, and frontend.
+
+1. PROJECT OVERVIEW
+-------------------
+
+CRIDA is a citizen registration and identity management system built with a Python Flask backend and a JavaScript frontend served through Node.js. Its main purpose is to manage citizen records, identity documents, biometric registration, officer accounts, and associated workflows.
+
+Key paths:
+- `crida/backend/` : backend Flask API
+- `crida/frontend/` : frontend static web application
+- `schema.sql` : database schema definitions
+- `seed_2.sql` : seed data for initial app state
+- `crida/backend/setup_database.sql` : database creation script
+
+2. PROJECT STRUCTURE
+--------------------
+
+Root layout:
+
+- `README.md` : overall instructions and setup guidance
+- `seed_2.sql` : seed data for CRIDA database
+- `schema.sql` : MySQL schema definitions used by the backend setup script
+- `crida/backend/`
+  - `app.py` : Flask app entrypoint and blueprint registration
+  - `config.py` : environment-based configuration loader
+  - `db.py` : MySQL connection pooling and query helpers
+  - `requirements.txt` : Python dependencies
+  - `.env.example` / `.env` : runtime environment variables
+  - `setup_database.sql` : creates DB, user, loads `schema.sql`
+  - `routes/` : API endpoint modules
+  - `middleware/` : authentication and authorization decorators
+  - `uploads/photos/` : saved biometric photo files
+  - `utils/` : helper modules for validation, notifications, PDFs, etc.
+- `crida/frontend/`
+  - `server.js` : Node.js static frontend server
+  - `package.json` : frontend dependencies and scripts
+  - `public/` : static frontend assets and application logic
+
+3. BACKEND ARCHITECTURE
+----------------------
+
+3.1 `app.py`
+
+`crida/backend/app.py` is the Flask application entrypoint. It:
+- creates the Flask app
+- configures CORS for the frontend origin
+- prepares upload directories
+- imports all route blueprints
+- registers blueprints under `/api/v1/<resource>` paths
+- exposes `/api/v1/health`
+- provides JSON error handling for 404 and 500
+
+Registered blueprints include:
+- `auth_bp` → `/api/v1/auth`
+- `citizen_bp` → `/api/v1/citizens`
+- `cnic_bp` → `/api/v1/cnic`
+- `passport_bp` → `/api/v1/passports`
+- `license_bp` → `/api/v1/licenses`
+- `reg_bp` → `/api/v1/registrations`
+- `pdf_bp` → `/api/v1/pdf`
+- `family_bp` → `/api/v1/family-tree`
+- `security_bp` → `/api/v1/security`
+- `update_bp` → `/api/v1/update-requests`
+- `camera_bp` → `/api/v1/camera`
+- `biometric_bp` → `/api/v1/biometric`
+- `complaint_bp` → `/api/v1/complaints`
+- `permission_bp` → `/api/v1/permissions`
+- `notification_bp` → `/api/v1/notifications`
+- `payment_bp` → `/api/v1/payments`
+- `audit_bp` → `/api/v1/audit`
+- `chatbot_bp` → `/api/v1/chatbot`
+
+3.2 `config.py`
+
+`crida/backend/config.py` loads environment variables from `.env` using `python-dotenv`.
+It exposes configuration values including:
+- DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+- DB_POOL_SIZE
+- JWT_SECRET_KEY, JWT_EXPIRY_HOURS
+- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+
+3.3 `db.py`
+
+`crida/backend/db.py` centralizes database access:
+- `get_pool()` initializes a MySQL connection pool with `mysql.connector.pooling.MySQLConnectionPool`
+- `get_connection()` returns a pooled connection
+- `execute_query(sql, params=None, fetch=False)` executes SQL safely, commits non-fetch statements, and returns rows when requested
+- `execute_transaction(operations)` executes a sequence of SQL operations inside one transaction
+- `execute_transaction_custom(fn)` allows custom transactional logic with explicit `conn` and `cursor`
+- `test_connection()` verifies DB connectivity using `SELECT 1 AS ok`
+
+This layer ensures all DB access uses the same connection settings and error handling.
+
+3.4 Middleware: Auth and RBAC
+
+`middleware/auth.py` provides `@token_required`:
+- reads the `Authorization: Bearer <token>` header
+- decodes JWT with `Config.JWT_SECRET_KEY`
+- if the token is a citizen token, verifies the citizen record exists and is active
+- if the token is an officer token, verifies the officer account is active and loads role details
+- stores the authenticated subject in `flask.g.officer`
+
+`middleware/rbac.py` provides:
+- `@role_required(...roles...)` for role-based authorization
+- `@permission_required(...permissions...)` for Permission table checks
+- `@access_level_required(min_level)` for numeric access control
+
+Admin bypasses permission checks, and Citizen portal requests are also exempted from permission table enforcement.
+
+4. DATABASE SCHEMA
+------------------
+
+The database schema in `schema.sql` defines the core data model. Important tables are:
+
+4.1 Core identity tables
+
+Citizen
+- primary person record
+- fields: `citizen_id`, `national_id_number`, `first_name`, `last_name`, `dob`, `gender`, `marital_status`, `blood_group`, `status`
+- `status` can be `active`, `deceased`, or `blacklisted`
+- has a uniqueness constraint on `national_id_number`
+
+Address
+- stores street, city, province, postal code
+
+Citizen_Address_History
+- records address changes per citizen
+- references `Citizen` and `Address`
+
+Family_Relationship
+- links citizens with family relationships
+- enforces that a citizen cannot relate to itself via trigger
+
+4.2 Officer and access control
+
+Role
+- officer roles: `Admin`, `Registrar`, `Passport_Officer`, `License_Officer`, `Security_Officer`
+- includes `access_level` for numeric role strength
+
+Officer
+- employee records with `full_name`, `email`, `password_hash`, `role_id`, `office_id`, `employee_id`, `is_active`
+- password is stored as bcrypt hash or legacy plaintext for initial seeded accounts
+
+Permission
+- grants fine-grained capabilities to officers
+- includes names such as `manage_citizens`, `manage_cnic`, `manage_passport`, `manage_license`, `manage_biometric`, and others
+- used by `@permission_required`
+
+4.3 Citizen application and document workflows
+
+Citizen_Application
+- stores registration applications from citizens
+- status values: `Pending`, `Under Review`, `Approved`, `Rejected`
+- on approval, may create a `Citizen` record and a `CNIC_Card`
+
+CNIC_Application
+- imports national identity card application details
+- references `Citizen` and `Office`
+
+CNIC_Card
+- stores issued ID cards with issue and expiry dates
+
+Passport_Application and Passport
+- passport request status and issued passport records
+- contains issue/expiry tracking
+
+Driving_License_Application and Driving_License
+- license application and issued license data
+- includes test scheduling
+
+Document
+- stores uploaded documents such as photos and supporting documentation
+- used by biometric photo upload and verification flows
+
+4.4 Biometric and security tables
+
+Biometric_Data
+- stores fingerprint and facial scan hashes per citizen
+- unique on `citizen_id`
+
+Criminal_Record
+- tracks citizen criminal cases and statuses
+
+Watchlist
+- flags citizens for security reasons
+- references the officer who added them
+
+Update_Request
+- citizen data update requests with reviewer workflow
+
+Notification
+- system notifications for citizens and officers
+- contains type, category, and read status
+
+Audit_Log
+- records officer actions for accountability
+- includes action type, table, record ID, old/new values, and IP address
+
+Payment_Transaction
+- tracks payments for services like CNIC, passport, licenses, and certificates
+
+Appointment
+- schedules service appointments for citizens and officers
+
+4.5 Schema constraints and triggers
+
+- CHECK constraints validate phone formats, statuses, and date relationships
+- triggers manage derived state:
+  - `update_citizen_status_on_death` sets a citizen to `deceased` after a death registration
+  - `create_cnic_card_on_approval` automatically creates a `CNIC_Card` when a `CNIC_Application` becomes approved
+
+5. BACKEND ↔ DATABASE CONNECTION
+--------------------------------
+
+The backend uses `mysql.connector` with a connection pool configured in `db.py`.
+
+Connection flow:
+- `config.py` loads `.env` values
+- `db.py` creates or retrieves the pool
+- route code calls `execute_query()` or transaction helpers
+- SQL uses `%s` parameter placeholders to avoid injection
+- non-fetch operations commit automatically, and errors roll back
+- transactions wrap multiple related queries into atomic units
+
+6. AUTHENTICATION AND AUTHORIZATION
+-----------------------------------
+
+Authentication flow:
+- officer login via `POST /api/v1/auth/login`
+- validates email and password against `Officer`
+- issues JWT containing `officer_id`, `role_name`, `access_level`, and expiration
+- stores token on the frontend and sends it on subsequent API calls
+
+Citizen login flow:
+- `POST /api/v1/auth/citizen-login`
+- validates `citizen_id` with either `national_id_number` or `cnic_number`
+- issues a JWT with `role_name=Citizen` and `access_level=0`
+- allows citizen portal access without officer credentials
+
+Authorization:
+- `@token_required` validates JWT and loads user data
+- `@role_required(...)` checks officer role
+- `@permission_required(...)` checks `Permission` table or bypasses for Admin and Citizen
+- `@access_level_required(min_level)` checks numeric access levels
+
+7. MAIN ROUTES AND FLOWS
+------------------------
+
+7.1 Officer login and password change
+
+`POST /api/v1/auth/login`
+- checks credentials
+- produces JWT
+- logs login into `Audit_Log`
+
+`PUT /api/v1/auth/change-password`
+- verifies current password
+- stores bcrypt-hashed new password
+- writes audit log in transaction
+
+7.2 Citizen listing and search
+
+`GET /api/v1/citizens/`
+- returns citizen records with pagination
+- supports search by name or national ID
+
+7.3 Citizen application workflow
+
+`POST /api/v1/citizens/apply`
+- creates a registration application in `Citizen_Application`
+
+`GET /api/v1/citizens/applications`
+- lists applications for officers with `manage_citizens` permission
+
+`PUT /api/v1/citizens/applications/<app_id>/approve`
+- approves an application
+- creates `Citizen`, `CNIC_Card`, and address history
+- updates the application record
+- inserts `Audit_Log` and `Notification`
+- uses a database transaction to keep the multi-step operation atomic
+
+7.4 Biometric upload and verification
+
+`POST /api/v1/biometric/upload-photo`
+- saves base64 JPEG to disk under `uploads/citizen_<id>_photo.jpg`
+- inserts or updates a `Document` row with `document_type='photo'`
+- requires `manage_biometric` permission
+
+`POST /api/v1/biometric/enroll`
+- writes fingerprint and/or facial hashes into `Biometric_Data`
+- updates existing rows without overwriting provided fields incorrectly
+
+`POST /api/v1/biometric/verify-fingerprint`
+- compares submitted fingerprint hash to stored hash using constant-time comparison
+
+`POST /api/v1/biometric/verify-face`
+- loads nearest stored photo from `Document`
+- decodes submitted image
+- tries `face_recognition` if installed
+- falls back to OpenCV ORB feature matching
+
+8. FRONTEND ARCHITECTURE
+------------------------
+
+8.1 `server.js`
+
+- serves static files from `crida/frontend/public`
+- sets `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy`
+- listens on port 3000
+
+8.2 `public/app.js`
+
+This file contains the frontend JavaScript logic. It handles:
+- login/logout and storing JWT in `localStorage`
+- role-based tab visibility
+- tab navigation and dynamic content loading
+- API requests with `fetch()` to the backend
+- toast notifications
+- dashboard chart rendering using Chart.js
+- citizen listing and search
+- application listing and filtering
+- biometric camera and verification interactions
+- theme toggling and localStorage persistence
+
+Important frontend flow:
+- login sends credentials to `/api/v1/auth/login`
+- the returned token is stored and used in `Authorization` headers
+- the UI uses the officer role to show/hide tabs
+- data is loaded per tab from backend API endpoints
+
+8.3 Frontend files
+
+Key client files:
+- `public/index.html`
+- `public/citizen.html`
+- `public/officerportal.html`
+- `public/chatbot.html`
+- `public/style.css`
+- `public/app.js`
+
+9. REQUEST PIPELINE
+-------------------
+
+Typical request flow:
+1. Frontend sends an HTTP request to `http://localhost:5000/api/v1/...`
+2. Flask receives it and routes it to the appropriate blueprint
+3. `@token_required` validates the request token for protected endpoints
+4. optional RBAC/permission decorators validate access
+5. route executes database queries through `db.py`
+6. the backend returns JSON results
+7. frontend renders the response or error message
+
+10. KEY FUNCTIONALITIES
+-----------------------
+
+- officer authentication and citizen portal login
+- role-based access and permissions
+- citizen registration application processing
+- CNIC, passport, and driving license workflows
+- biometric enrollment and verification
+- document upload and file tracking
+- audit logging for actions
+- notifications and status updates
+- payments and transaction records
+- appointments, complaints, update requests
+- criminal record and watchlist support
+- dashboard metrics and searchable lists
+
+11. DATABASE-BACKEND RELATIONSHIPS
+----------------------------------
+
+Important links between tables and backend logic:
+- `Officer` and `Role` define users and privileges
+- `Permission` grants additional capabilities to officers
+- `Citizen` is the core entity referenced by `CNIC_Card`, `Passport`, `Driving_License`, `Biometric_Data`, `Notification`, `Payment_Transaction`, `Watchlist`, `Criminal_Record`, `Appointment`, `Document`, etc.
+- `Citizen_Application` is the intake form for a new citizen record
+- `Document` stores uploaded biometric photos and supporting files
+- `Audit_Log` stores officer actions from authentication and data changes
+- `Payment_Transaction` connects service payments to application records
+
+12. SETUP AND EXECUTION
+------------------------
+
+To run CRIDA:
+1. Run database setup:
+   `sudo mysql -u root -p < crida/backend/setup_database.sql`
+2. Create `.env` in `crida/backend/` using `.env.example`
+3. Seed data:
+   `sudo mysql -u root -p CRID < seed_2.sql`
+4. Start backend from `crida/backend/`:
+   `python3 -m venv venv`
+   `source venv/bin/activate`
+   `pip install -r requirements.txt`
+   `python app.py`
+5. Start frontend from `crida/frontend/`:
+   `npm install`
+   `node server.js`
+6. Open `http://localhost:3000`
+
+13. IMPORTANT NOTES
+-------------------
+
+- Backend and frontend are separate services communicating via HTTP
+- The frontend does not access the database directly
+- The backend uses SQL queries, not an ORM, so logic is explicit in route modules
+- Biometric photos are stored on disk under `crida/backend/uploads/`
+- JWT tokens are mandatory for protected routes
+- Role/permission decorators are the main security enforcement layer
+
+14. FILES TO REVIEW FOR DETAILS
+-------------------------------
+
+- `crida/backend/app.py`
+- `crida/backend/db.py`
+- `crida/backend/config.py`
+- `crida/backend/middleware/auth.py`
+- `crida/backend/middleware/rbac.py`
+- `crida/backend/routes/auth_routes.py`
+- `crida/backend/routes/citizen_routes.py`
+- `crida/backend/routes/biometric_routes.py`
+- `schema.sql`
+- `crida/backend/setup_database.sql`
+- `crida/frontend/server.js`
+- `crida/frontend/public/app.js`
+
+END OF DOCUMENT
