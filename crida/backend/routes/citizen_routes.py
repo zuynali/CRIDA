@@ -41,19 +41,6 @@ def list_citizens():
     return jsonify({"citizens": rows or [], "total": total["cnt"], "page": page, "limit": limit}), 200
 
 
-def _verify_citizen_sequence(cursor):
-    cursor.execute(
-        """SELECT MAX(citizen_id) AS max_id, MIN(citizen_id) AS min_id, COUNT(*) AS total
-               FROM Citizen""")
-    row = cursor.fetchone()
-    max_id = row["max_id"] or 0
-    min_id = row["min_id"] or 0
-    total = row["total"] or 0
-    if min_id != 1 or max_id != total:
-        raise ValueError(
-            "Citizen ID sequence is broken: there are gaps in Citizen IDs. "
-            "Please restore sequential IDs before approving new citizens."
-        )
 
 
 @citizen_bp.route("/apply", methods=["POST"])
@@ -213,12 +200,16 @@ def approve_citizen_application(app_id):
         return jsonify({"error": "Invalid date of birth format."}), 400
 
     def ops(conn, cursor):
-        _verify_citizen_sequence(cursor)
-
         # Generate the next sequential national ID number.
         cursor.execute(
             """SELECT
-                   COALESCE(MAX(CAST(national_id_number AS UNSIGNED)), 3000000000099) + 1 AS next_nid
+                   COALESCE(
+                       MAX(CASE
+                           WHEN CAST(national_id_number AS UNSIGNED) BETWEEN 3000000000101 AND 3999999999999
+                           THEN CAST(national_id_number AS UNSIGNED)
+                       END),
+                       3000000000100
+                   ) + 1 AS next_nid
                FROM Citizen""")
         row = cursor.fetchone()
         national_id = str(row["next_nid"])
